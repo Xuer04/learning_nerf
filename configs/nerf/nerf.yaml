@@ -1,7 +1,7 @@
 task: nerf
-gpus: [0]
-exp_name: 'nerf'
-scene: 'lego'
+gpus: [3] # set gpu device number
+exp_name: "nerf"
+scene: "lego"
 
 train_dataset_module: lib.datasets.nerf.synthetic
 test_dataset_module: lib.datasets.nerf.synthetic
@@ -11,53 +11,60 @@ evaluator_module: lib.evaluators.nerf
 visualizer_module: lib.visualizers.nerf
 
 task_arg:
-    N_rays: 1024
-    chunk_size: 4096
-    white_bkgd: True
-    cascade_samples: [64, 128]
+  N_rays: 1024 # number of rays in each batch
+  chunk_size: 4096 # number of rays processed in parallel
+  white_bkgd: True # use white background
+  cascade_samples: [64, 128] # number of samples per ray in network(coarse, fine)
+  no_batching: True # True for synthetic datasets
+  use_viewdirs: True # whether use full 5D input instead of 3D
+  use_pe: True # whether use positional encoding
+  test_skip: 1 # will load 1/N images from test/val sets, useful for large datasets
+  precrop_iters: 500
+  precrop_frac: 0.5
 
 network:
-    nerf:
-        W: 256
-        D: 8
-        V_D: 1
-    xyz_encoder:
-        type: 'frequency'
-        input_dim: 3
-        freq: 10
-    dir_encoder:
-        type: 'frequency'
-        input_dim: 3
-        freq: 4
+  nerf:
+    W: 256 # width of network
+    D: 8 # depth of network
+    use_viewdirs: 1 # whether depend on view
+    skips: [4]
+  xyz_encoder: # encoder for location
+    type: "frequency"
+    input_dim: 3 # dimensions of input data
+    freq: 10 # dimensions of encoding location
+  dir_encoder: # encoder for direction
+    type: "frequency"
+    input_dim: 3 # dimensions of input data
+    freq: 4 # dimensions of encoding direction
 
 train_dataset:
-    data_root: 'data/nerf_synthetic'
-    split: 'train'
-    input_ratio: 1.
-    cams: [0, -1, 1] 
+  data_root: "data/nerf_synthetic"
+  split: "train"
+  input_ratio: 1. # whether to downsampling the image
+  cams: [0, -1, 1] #! todo
 
 test_dataset:
-    data_root: 'data/nerf_synthetic'
-    split: 'test'
-    input_ratio: 0.5
-    cams: [0, -1, 100]
+  data_root: "data/nerf_synthetic"
+  split: "test"
+  input_ratio: 0.5
+  cams: [0, -1, 100] #! todo
 
 train:
-    batch_size: 1
-    lr: 5e-4
-    weight_decay: 0.
-    epoch: 400
-    scheduler:
-        type: 'exponential'
-        gamma: 0.1
-        decay_epochs: 1000
-    num_workers: 4
+  batch_size: 1
+  lr: 5e-4 # learning rate
+  weight_decay: 0.
+  epoch: 400
+  scheduler:
+    type: "exponential"
+    gamma: 0.1
+    decay_epochs: 500 # original 1000
+  num_workers: 4
 
 test:
-    batch_size: 1
+  batch_size: 1
 
-ep_iter: 500
+ep_iter: 500 # number of iterations in each epoch
 save_ep: 20
-eval_ep: 20       # 10000 iterations
+eval_ep: 20 # 10000 iterations
 save_latest_ep: 5 # 2500 iterations
 log_interval: 10
