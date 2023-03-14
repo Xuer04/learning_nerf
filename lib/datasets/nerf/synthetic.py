@@ -26,7 +26,6 @@ class Dataset(data.Dataset):
         self.input_ratio = kwargs['input_ratio']
         self.split = split # train or test
         self.num_iter = 0
-        self.device = "cuda"
         self.use_batching = not cfg.task_arg.no_batching
         cams = kwargs['cams']
         self.batch_size = cfg.task_arg.N_rays
@@ -49,7 +48,7 @@ class Dataset(data.Dataset):
         self.num_imgs = imgs.shape[0]
 
         # get inner arguments of camera
-        H, W = imgs[0].shape[:2]  # H:800    W:800
+        H, W = imgs[0].shape[:2]
         camera_angle_x = float(json_info['camera_angle_x'])
         focal = 0.5 * W / np.tan(0.5 * camera_angle_x)
 
@@ -64,19 +63,19 @@ class Dataset(data.Dataset):
         # adjust images according to the opacity
         imgs = imgs[..., :3] * imgs[..., -1:] + (1 - imgs[..., -1:]) # (..., 4) -> (..., 3)
 
-        self.imgs = imgs
-        self.poses = poses
+        self.imgs = torch.from_numpy(imgs)
+        self.poses = torch.from_numpy(poses)
         self.H = H
         self.W = W
         self.focal = focal
 
         # set t_x, t_y
-        X, Y = np.meshgrid(np.arange(W), np.arange(H))
+        X, Y = torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy')
         self.t_x = (X - self.W * 0.5) / self.focal
         self.t_y = (Y - self.H * 0.5) / self.focal
-        self.precrop_index = np.arange(self.W * self.H).reshape(self.H, self.W)
 
         # set args for center crop
+        self.precrop_index = torch.arange(self.W * self.H).view(self.H, self.W)
         dH = int(self.H // 2 * self.precrop_frac)
         dW = int(self.W // 2 * self.precrop_frac)
         self.precrop_index = self.precrop_index[self.H // 2 - dH:self.H // 2 + dH, self.W // 2 - dW:self.W // 2 + dW].reshape(-1)
@@ -84,15 +83,14 @@ class Dataset(data.Dataset):
         rays_o, rays_d = [], []
 
         for i in range(self.num_imgs):
-            ray_o, ray_d = self.get_rays(self.t_x, self.t_y, poses[i])
+            ray_o, ray_d = self.get_rays(self.t_x, self.t_y, self.poses[i])
             rays_d.append(ray_d)
             rays_o.append(ray_o)
 
-        self.rays_o = np.stack(rays_o)
-        self.rays_d = np.stack(rays_d)
+        self.rays_o = torch.stack(rays_o)
+        self.rays_d = torch.stack(rays_d)
 
-        self.imgs = self.imgs.reshape(self.num_imgs, -1, 3)
-        self.images = torch.cuda.FloatTensor(self.images, device=self.device).view(self.num_image, -1, 3)
+        self.imgs = self.imgs.view(self.num_imgs, -1, 3)
 
 
     def __getitem__(self, index):
@@ -143,9 +141,9 @@ class Dataset(data.Dataset):
 
 
     def get_rays(self, X, Y, pose):
-        dirs = np.stack([X, -Y, -np.ones_like(X)])
+        dirs = torch.stack([X, -Y, -torch.ones_like(X)])
         c2w = pose[:3, :3]
 
-        ray_d = dirs.reshape(-1, 3) @ c2w.T
-        ray_o = np.broadcast_to(c2w[:3, -1], np.shape(ray_d))
+        ray_d = dirs.view(-1, 3) @ c2w.T
+        ray_o = c2w[:3, -1].expand(ray_d.shape)
         return ray_o, ray_d
