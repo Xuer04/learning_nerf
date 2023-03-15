@@ -83,7 +83,7 @@ class Dataset(data.Dataset):
         rays_o, rays_d = [], []
 
         for i in range(self.num_imgs):
-            ray_o, ray_d = self.get_rays(self.t_x, self.t_y, self.poses[i])
+            ray_o, ray_d = self.get_ray(self.t_x, self.t_y, self.poses[i])
             rays_d.append(ray_d)
             rays_o.append(ray_o)
 
@@ -140,10 +140,11 @@ class Dataset(data.Dataset):
         return self.num_imgs
 
 
-    def get_rays(self, X, Y, pose):
-        dirs = torch.stack([X, -Y, -torch.ones_like(X)])
+    def get_ray(self, X, Y, pose):
+        dirs = torch.stack([X, -Y, -torch.ones_like(X)], dim=-1)
         c2w = pose[:3, :3]
 
-        ray_d = dirs.view(-1, 3) @ c2w.T
+        ray_d = dirs.reshape(-1, 3) @ c2w.T
         ray_o = c2w[:3, -1].expand(ray_d.shape)
+
         return ray_o, ray_d
