@@ -34,14 +34,14 @@ class Dataset(data.Dataset):
         # set uv
         H, W = img.shape[:2]
         X, Y = np.meshgrid(np.arange(W), np.arange(H))
-        u, v = X.astype(np.float32) / (W-1), Y.astype(np.float32) / (H-1)
-        self.uv = np.stack([u, v], -1).reshape(-1, 2).astype(np.float32)
+        u, v = X.astype(np.float32) / (W-1), Y.astype(np.float32) / (H-1)  # (800, 800) (800, 800)
+        self.uv = np.stack([u, v], -1).reshape(-1, 2).astype(np.float32)  # (640000, 2)
 
     def __getitem__(self, index):
         if self.split == 'train':
-            ids = np.random.choice(len(self.uv), self.batch_size, replace=False)
-            uv = self.uv[ids]
-            rgb = self.img.reshape(-1, 3)[ids]
+            ids = np.random.choice(len(self.uv), self.batch_size, replace=False)  # (batch_size, )
+            uv = self.uv[ids]  # (batch_size, 2)
+            rgb = self.img.reshape(-1, 3)[ids]  # (batch_size, 3)
         else:
             uv = self.uv
             rgb = self.img.reshape(-1, 3)

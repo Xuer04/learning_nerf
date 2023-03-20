@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import numpy as np
-from lib.networks.encoding import get_encoder
+from lib.networks.nerf.nerf_network import NeRF
 from lib.config import cfg
 from lib.networks.nerf.render import *
 
@@ -10,60 +9,45 @@ from lib.networks.nerf.render import *
 class Network(nn.Module):
     def __init__(self,):
         super(Network, self).__init__()
-        net_cfg = cfg.network
-        self.D = net_cfg.nerf.D
-        self.W = net_cfg.nerf.W
-        self.skips = net_cfg.nerf.skips
-        self.use_viewdirs = net_cfg.nerf.use_viewdirs
-        self.output_ch = 5 if self.use_viewdirs else 4
-        self.xyz_encoder, self.input_ch = get_encoder(net_cfg.xyz_encoder)
-        self.dir_encoder, self.input_ch_views = get_encoder(net_cfg.dir_encoder)
+        self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+        self.N_samples = cfg.task_arg.N_samples
+        self.N_importance = cfg.task_arg.N_importance
+        self.batch_size = cfg.task_arg.N_rays
+        self.chunk = cfg.task_arg.chunk_size
+        self.white_bkgd = cfg.task_arg.white_bkgd
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.pts_linears = nn.ModuleList(
-        [nn.Linear(self.input_ch, self.W)] + [nn.Linear(self.W, self.W) if i not in self.skips else nn.Linear(self.W + self.input_ch, self.W) for i in
-                                        range(self.D - 1)])
+        # coarse model
+        self.model = NeRF().to(self.device)
+        self.grad_vars = list(self.model.parameters())
 
-        self.views_linears = nn.ModuleList([nn.Linear(self.input_ch_views + self.W, self.W // 2)])
+        # fine model
+        self.model_fine = NeRF().to(self.device)
+        self.grad_vars.extend(list(self.model_fine.parameters()))
 
-        if self.use_viewdirs:
-            # feature vector(256)
-            self.feature_linear = nn.Linear(self.W, self.W)
-            # alpha(1)
-            self.alpha_linear = nn.Linear(self.W, 1)
-            # rgb color(3)
-            self.rgb_linear = nn.Linear(self.W // 2, 3)
-        else:
-            # output channel(default: 4)
-            self.output_linear = nn.Linear(self.W, self.output_ch)
+        # encoder
+        self.xyz_encoder, self.input_ch = self.model.xyz_encoder, self.model.input_ch
+        self.dir_encoder, self.input_ch_views = self.model.dir_encoder, self.model.input_ch_views
 
 
-    def forward(self, x):
-        # x (N_rand * N_samples, 90)  90 = 60 + 3 + 24 + 3
-        # input_pts (N_rand * N_samples, 63)
-        # input_views (N_rand * N_samples, 27)
-        input_pts, input_views = torch.split(x, [self.input_ch, self.input_ch_views], dim=-1)
-        h = input_pts
-        for i, _ in enumerate(self.pts_linears):
+    def batchify(self, ray_o, ray_d):
+        all_ret = {}
+        for i in range(0, self.batch_size, self.chunk):
+            ret = render_rays(self.model, self.model_fine, ray_o[i:i + self.chunk], ray_d[i:i + self.chunk], self.device, self.N_samples, self.N_importance, self.white_bkgd)
+            for k in ret:
+                if k not in all_ret:
+                    all_ret[k] = []
+                all_ret[k].append(ret[k])
+        all_ret = {k: torch.cat(all_ret[k], dim=0) for k in all_ret}
+        return all_ret
 
-            h = self.pts_linears[i](h)
-            h = F.relu(h)
-            if i in self.skips:
-                h = torch.cat([input_pts, h], -1)
-
-        if self.use_viewdirs:
-            # alpha is related to pts
-            alpha = self.alpha_linear(h)
-            feature = self.feature_linear(h)
-            # rgb is related to pts and views
-            h = torch.cat([feature, input_views], -1)
-
-            for i, _ in enumerate(self.views_linears):
-                h = self.views_linears[i](h)
-                h = F.relu(h)
-
-            rgb = self.rgb_linear(h)
-            outputs = torch.cat([rgb, alpha], -1)
-        else:
-            outputs = self.output_linear(h)
-
-        return outputs
+    def forward(self, batch):
+        """
+        batch['ray_o']: [1, N_rays, 3]
+        batch['ray_d']: [1, N_rays, 3]
+        batch['img_rgb']: [1, N_rays, 3]
+        """
+        B, N_rays, C = batch['ray_o'].shape
+        ray_o, ray_d = batch['ray_o'].reshape(-1, C), batch['ray_d'].reshape(-1, C)
+        ret = self.batchify(ray_o, ray_d)
+        return {k:ret[k].reshape(B, N_rays, -1) for k in ret}

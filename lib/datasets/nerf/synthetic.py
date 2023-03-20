@@ -25,6 +25,7 @@ class Dataset(data.Dataset):
         self.data_root = os.path.join(data_root, scene)
         self.input_ratio = kwargs['input_ratio']
         self.split = split # train or test
+        self.white_bkgd = cfg.task_arg.white_bkgd
         self.num_iter = 0
         self.use_batching = not cfg.task_arg.no_batching
         cams = kwargs['cams']
@@ -60,8 +61,11 @@ class Dataset(data.Dataset):
             for i, img in enumerate(imgs):
                 imgs_half[i] = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
             imgs = imgs_half
-        # adjust images according to the opacity
-        imgs = imgs[..., :3] * imgs[..., -1:] + (1 - imgs[..., -1:]) # (..., 4) -> (..., 3)
+        # whether use white background
+        if self.white_bkgd:
+            imgs = imgs[..., :3] * imgs[..., -1:] + (1 - imgs[..., -1:]) # (..., 4) -> (..., 3)
+        else:
+            imgs = imgs[..., :3]
 
         self.imgs = torch.from_numpy(imgs)
         self.poses = torch.from_numpy(poses)
@@ -87,10 +91,10 @@ class Dataset(data.Dataset):
             rays_d.append(ray_d)
             rays_o.append(ray_o)
 
-        self.rays_o = torch.stack(rays_o)
-        self.rays_d = torch.stack(rays_d)
+        self.rays_o = torch.stack(rays_o)  # [num_imgs, 400 * 400, 3]
+        self.rays_d = torch.stack(rays_d)  # [num_imgs, 400 * 400, 3]
 
-        self.imgs = self.imgs.view(self.num_imgs, -1, 3)
+        self.imgs = self.imgs.reshape(self.num_imgs, -1, 3)  # [num_imgs, 400 * 400, 3]
 
 
     def __getitem__(self, index):
@@ -114,15 +118,17 @@ class Dataset(data.Dataset):
                 ray_os = ray_os[self.precrop_index]
                 img_rgbs = img_rgbs[self.precrop_index]
             select_ids = np.random.choice(ray_ds.shape[0], self.batch_size, replace=False)
-            ray_d = ray_ds[select_ids]
-            ray_o = ray_os[select_ids]
-            img_rgb = img_rgbs[select_ids]
+            ray_d = ray_ds[select_ids]  # [1, N_rays, 3]
+            ray_o = ray_os[select_ids]  # [1, N_rays, 3]
+            img_rgb = img_rgbs[select_ids]  # [1, N_rays, 3]
+            rays = torch.stack([ray_o, ray_d], 0) # [2, N_rays, 3]
         else:
-            ray_d = self.rays_d
-            ray_o = self.rays_o
-            img_rgb = self.imgs
+            ray_d = self.rays_d  # [1, num_imgs, 400 * 400, 3]
+            ray_o = self.rays_o  # [1, num_imgs, 400 * 400, 3]
+            img_rgb = self.imgs  # [1, num_imgs, 400 * 400, 3]
 
         ret = {'ray_o': ray_o, 'ray_d': ray_d, 'img_rgb': img_rgb}
+        # ret = {'rays': rays, 'img_rgb': img_rgb}
         ret.update({'meta':{'H': self.H, 'W': self.W, 'focal': self.focal}})
         return ret
 
