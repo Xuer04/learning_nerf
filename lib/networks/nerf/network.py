@@ -9,13 +9,13 @@ from lib.networks.nerf.render import *
 class Network(nn.Module):
     def __init__(self,):
         super(Network, self).__init__()
-        self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
         self.N_samples = cfg.task_arg.N_samples
         self.N_importance = cfg.task_arg.N_importance
         self.batch_size = cfg.task_arg.N_rays
         self.chunk = cfg.task_arg.chunk_size
         self.white_bkgd = cfg.task_arg.white_bkgd
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # print(f"Device: {self.device}")
 
         # coarse model
         self.model = NeRF().to(self.device)
@@ -30,10 +30,10 @@ class Network(nn.Module):
         self.dir_encoder, self.input_ch_views = self.model.dir_encoder, self.model.input_ch_views
 
 
-    def batchify(self, ray_o, ray_d):
+    def batchify_rays(self, ray_o, ray_d):
         all_ret = {}
         for i in range(0, self.batch_size, self.chunk):
-            ret = render_rays(self.model, self.model_fine, ray_o[i:i + self.chunk], ray_d[i:i + self.chunk], self.device, self.N_samples, self.N_importance, self.white_bkgd)
+            ret = render_rays(self.model, self.model_fine, ray_o[i:i + self.chunk], ray_d[i:i + self.chunk], self.N_samples, self.device, self.N_importance, self.white_bkgd)
             for k in ret:
                 if k not in all_ret:
                     all_ret[k] = []
@@ -49,5 +49,5 @@ class Network(nn.Module):
         """
         B, N_rays, C = batch['ray_o'].shape
         ray_o, ray_d = batch['ray_o'].reshape(-1, C), batch['ray_d'].reshape(-1, C)
-        ret = self.batchify(ray_o, ray_d)
+        ret = self.batchify_rays(ray_o, ray_d)
         return {k:ret[k].reshape(B, N_rays, -1) for k in ret}
