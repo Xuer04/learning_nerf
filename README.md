@@ -17,7 +17,7 @@ This repository is initially created by [Haotong Lin](https://haotongl.github.io
 
 ## Data preparation
 
-Download NeRF synthetic dataset and add a link to the data directory. After preparation, you should have the following directory structure: 
+Download NeRF synthetic dataset and add a link to the data directory. After preparation, you should have the following directory structure:
 ```
 data/nerf_synthetic
 |-- chair
@@ -108,3 +108,7 @@ python train_net.py --cfg_file configs/img_fit/lego_view0.yaml
 ```
 python run.py --type evaluate --cfg_file configs/img_fit/lego_view0.yaml
 ```
+
+## 问题记录
+
+复现过程中出现的一些问题记录在这里: [Issues](https://github.com/Xuer04/learning_nerf/blob/master/Issues.md)
