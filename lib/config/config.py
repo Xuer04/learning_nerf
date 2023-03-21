@@ -48,6 +48,7 @@ cfg.hard_lap = False
 cfg.save_result = False
 cfg.clear_result = False
 cfg.save_tag = 'default'
+
 # module
 cfg.train_dataset_module = 'lib.datasets.dtu.neus'
 cfg.test_dataset_module = 'lib.datasets.dtu.neus'

@@ -53,7 +53,7 @@ def run_evaluate():
                            epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=False)
+    data_loader = make_data_loader(cfg, is_train=True)
     evaluator = make_evaluator(cfg)
     net_time = []
     for batch in tqdm.tqdm(data_loader):
@@ -93,7 +93,7 @@ def run_visualize():
                  epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=False)
+    data_loader = make_data_loader(cfg, is_train=True)
     visualizer = make_visualizer(cfg)
     for batch in tqdm.tqdm(data_loader):
         batch = to_cuda(batch)

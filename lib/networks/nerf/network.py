@@ -45,7 +45,7 @@ class Network(nn.Module):
         """
         batch['ray_o']: [1, N_rays, 3]
         batch['ray_d']: [1, N_rays, 3]
-        batch['img_rgb']: [1, N_rays, 3]
+        batch['rgb']: [1, N_rays, 3]
         """
         B, N_rays, C = batch['ray_o'].shape
         ray_o, ray_d = batch['ray_o'].reshape(-1, C), batch['ray_d'].reshape(-1, C)

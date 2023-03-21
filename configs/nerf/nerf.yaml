@@ -43,12 +43,16 @@ train_dataset:
   split: "train"
   input_ratio: 1. # whether to downsampling the image
   cams: [0, -1, 1] #! todo
+  H: 800
+  W: 800
 
 test_dataset:
   data_root: "data/nerf_synthetic"
   split: "test"
   input_ratio: 0.5
   cams: [0, -1, 100] #! todo
+  H: 800
+  W: 800
 
 train:
   batch_size: 1

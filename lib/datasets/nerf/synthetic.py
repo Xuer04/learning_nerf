@@ -127,9 +127,8 @@ class Dataset(data.Dataset):
             ray_o = self.rays_o  # [1, num_imgs, 400 * 400, 3]
             img_rgb = self.imgs  # [1, num_imgs, 400 * 400, 3]
 
-        ret = {'ray_o': ray_o, 'ray_d': ray_d, 'img_rgb': img_rgb}
-        # ret = {'rays': rays, 'img_rgb': img_rgb}
-        ret.update({'meta':{'H': self.H, 'W': self.W, 'focal': self.focal}})
+        ret = {'ray_o': ray_o, 'ray_d': ray_d, 'rgb': img_rgb}
+        ret.update({'meta':{'H': self.H, 'W': self.W, 'focal': self.focal, 'N_rays': self.batch_size}})
         return ret
 
 
