@@ -7,7 +7,7 @@ def run_dataset():
     import tqdm
 
     cfg.train.num_workers = 0
-    data_loader = make_data_loader(cfg, is_train=True)
+    data_loader = make_data_loader(cfg, is_train=False)
     for batch in tqdm.tqdm(data_loader):
         pass
 
@@ -24,7 +24,7 @@ def run_network():
     load_network(network, cfg.trained_model_dir, epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=True)
+    data_loader = make_data_loader(cfg, is_train=False)
     total_time = 0
     for batch in tqdm.tqdm(data_loader):
         batch = to_cuda(batch)
@@ -35,7 +35,6 @@ def run_network():
             torch.cuda.synchronize()
             total_time += time.time() - start
     print(total_time / len(data_loader))
-
 
 def run_evaluate():
     from lib.datasets import make_data_loader
@@ -53,7 +52,7 @@ def run_evaluate():
                            epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=True)
+    data_loader = make_data_loader(cfg, is_train=False)
     evaluator = make_evaluator(cfg)
     net_time = []
     for batch in tqdm.tqdm(data_loader):
@@ -93,8 +92,8 @@ def run_visualize():
                  epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=True)
-    visualizer = make_visualizer(cfg)
+    data_loader = make_data_loader(cfg, is_train=False)
+    visualizer = make_visualizer(cfg, is_train=False)
     for batch in tqdm.tqdm(data_loader):
         batch = to_cuda(batch)
         with torch.no_grad():

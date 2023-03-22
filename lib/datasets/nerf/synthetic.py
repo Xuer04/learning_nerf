@@ -9,6 +9,7 @@ import imageio
 import json
 import cv2
 
+
 class Dataset(data.Dataset):
     def __init__(self, **kwargs):
         """
@@ -29,15 +30,15 @@ class Dataset(data.Dataset):
         self.num_iter = 0
         self.use_batching = not cfg.task_arg.no_batching
         cams = kwargs['cams']
-        self.batch_size = cfg.task_arg.N_rays
         self.precrop_iters = cfg.task_arg.precrop_iters
         self.precrop_frac = cfg.task_arg.precrop_frac
+        self.batch_size = cfg.task_arg.N_rays
 
         # read all images and poses
         imgs = []
         poses = []
-        json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format(split))))
-        # json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format('train'))))
+        json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format(self.split))))
+        json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format('train'))))
         for frame in json_info['frames']:
             img_path = os.path.join(self.data_root, frame['file_path'][2:] + '.png')
             imgs.append(imageio.imread(img_path))
@@ -91,11 +92,9 @@ class Dataset(data.Dataset):
             rays_d.append(ray_d)
             rays_o.append(ray_o)
 
-        self.rays_o = torch.stack(rays_o)  # [num_imgs, 400 * 400, 3]
-        self.rays_d = torch.stack(rays_d)  # [num_imgs, 400 * 400, 3]
-
-        self.imgs = self.imgs.reshape(self.num_imgs, -1, 3)  # [num_imgs, 400 * 400, 3]
-
+        self.rays_o = torch.stack(rays_o)                             # [num_imgs, H * W, 3]
+        self.rays_d = torch.stack(rays_d)                             # [num_imgs, H * W, 3]
+        self.imgs = self.imgs.reshape(self.num_imgs, -1, 3)           # [num_imgs, H * W, 3]
 
     def __getitem__(self, index):
         """
@@ -106,11 +105,11 @@ class Dataset(data.Dataset):
         Input:
             @index: 图像下标, 范围为 [0, len-1]
         Output:
-            None
+            @ret: 包含所需数据的字典(添加 'meta' 用于 evaluate)
         """
         if self.split == 'train':
-            ray_ds = self.rays_d[index]
             ray_os = self.rays_o[index]
+            ray_ds = self.rays_d[index]
             img_rgbs = self.imgs[index]
             self.num_iter += 1
             if self.num_iter < self.precrop_iters:
@@ -118,19 +117,18 @@ class Dataset(data.Dataset):
                 ray_os = ray_os[self.precrop_index]
                 img_rgbs = img_rgbs[self.precrop_index]
             select_ids = np.random.choice(ray_ds.shape[0], self.batch_size, replace=False)
-            ray_d = ray_ds[select_ids]  # [1, N_rays, 3]
-            ray_o = ray_os[select_ids]  # [1, N_rays, 3]
-            img_rgb = img_rgbs[select_ids]  # [1, N_rays, 3]
-            rays = torch.stack([ray_o, ray_d], 0) # [2, N_rays, 3]
+            ray_d = ray_ds[select_ids]                      # [N_rays, 3]
+            ray_o = ray_os[select_ids]                      # [N_rays, 3]
+            img_rgb = img_rgbs[select_ids]                  # [N_rays, 3]
+            rays = torch.stack([ray_o, ray_d], 0)           # [N_rays, 3]
         else:
-            ray_d = self.rays_d  # [1, num_imgs, 400 * 400, 3]
-            ray_o = self.rays_o  # [1, num_imgs, 400 * 400, 3]
-            img_rgb = self.imgs  # [1, num_imgs, 400 * 400, 3]
+            ray_d = self.rays_d[index]  # [H * W, 3]
+            ray_o = self.rays_o[index]  # [H * W, 3]
+            img_rgb = self.imgs[index]  # [H * W, 3]
 
         ret = {'ray_o': ray_o, 'ray_d': ray_d, 'rgb': img_rgb}
         ret.update({'meta':{'H': self.H, 'W': self.W, 'focal': self.focal, 'N_rays': self.batch_size}})
         return ret
-
 
     def __len__(self):
         """
@@ -143,7 +141,6 @@ class Dataset(data.Dataset):
             @len: 训练或者测试的数量
         """
         return self.num_imgs
-
 
     def get_ray(self, X, Y, pose):
         dirs = torch.stack([X, -Y, -torch.ones_like(X)], dim=-1)

@@ -1,22 +1,24 @@
 ## 记录一下复现过程中出现的问题
 
+<font color="#c00000">问题</font> 红色表示还没解决
+
 ### 框架相关
 
-#### 问题 1:
+#### <font color="#c00000">问题 1:</font>
 
-在设计 Datasets 的时候, 训练集(train) 和 测试集(test) 每次`__getitem__()`得到的 batch 不一样, 经过网络的时候输入有问题?
+训练的时候 loss 一直下不去, 停在 0.4 左右不动
 
 ### NeRF 相关
 
 #### 问题 1:
 
-- 在每个 batch 中, 得到的 RGB 结果为 (N_rays, 3), 如何根据这个输出来渲染图片做 visualize?
-- 图片经过降采样变成了 (400, 400), 渲染还原回去 (800, 800)的时候要怎么做?
-
-#### 问题 2:
-
 - 在光线采样的时候, 为了防止 OOM, 使用了`chunk_size`, `N_rays`的默认值是 1024, `chunk_size`的默认值是 4096, 好像没有起到 **batchify** 的作用?
+
+> **batchify** 主要是在 evaluate 的时候做, 这个时候的`N_rays`应该是 `H * W`, 大于`chunk_size`
+
 - 在光线上采样空间点得到 (N_rays * N_samples) 个空间点的时候应该做一下 **batchify**?
+
+> 可以不用做, 在`batchify_rays`的时候做就可以了
 
 ### Pytorch 相关
 

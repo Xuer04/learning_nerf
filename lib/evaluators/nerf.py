@@ -25,8 +25,8 @@ class Evaluator:
         os.system('mkdir -p ' + cfg.result_dir + '/vis')
 
     def evaluate(self, output, batch):
-        pred_rgb = output['rgb1'][0].detach().cpu().numpy()
-        gt_rgb = batch['rgb'][0].detach().cpu().numpy()
+        pred_rgb = output['rgb1'][0].detach().cpu().numpy()             # [H * W, 3]
+        gt_rgb = batch['rgb'][0].detach().cpu().numpy()                 # [H * W, 3]
 
         mse_item = np.mean((pred_rgb - gt_rgb)**2)
         self.mses.append(mse_item)

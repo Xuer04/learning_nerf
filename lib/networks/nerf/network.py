@@ -11,8 +11,8 @@ class Network(nn.Module):
         super(Network, self).__init__()
         self.N_samples = cfg.task_arg.N_samples
         self.N_importance = cfg.task_arg.N_importance
-        self.batch_size = cfg.task_arg.N_rays
         self.chunk = cfg.task_arg.chunk_size
+        self.batch_size = cfg.task_arg.N_rays
         self.white_bkgd = cfg.task_arg.white_bkgd
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # print(f"Device: {self.device}")
@@ -43,11 +43,17 @@ class Network(nn.Module):
 
     def forward(self, batch):
         """
-        batch['ray_o']: [1, N_rays, 3]
-        batch['ray_d']: [1, N_rays, 3]
-        batch['rgb']: [1, N_rays, 3]
+        train:
+            @batch['ray_o']: [1, N_rays, 3]
+            @batch['ray_d']: [1, N_rays, 3]
+            @batch['rgb']: [1, N_rays, 3]
+        test:
+            @batch['ray_o']: [1, H * W, 3]
+            @batch['ray_d']: [1, H * W, 3]
+            @batch['rgb']: [1, H * W, 3]
         """
         B, N_rays, C = batch['ray_o'].shape
+        self.batch_size = max(self.batch_size, N_rays)
         ray_o, ray_d = batch['ray_o'].reshape(-1, C), batch['ray_d'].reshape(-1, C)
         ret = self.batchify_rays(ray_o, ray_d)
         return {k:ret[k].reshape(B, N_rays, -1) for k in ret}
