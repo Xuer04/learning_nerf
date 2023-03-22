@@ -41,6 +41,7 @@ class Network(nn.Module):
         all_ret = {k: torch.cat(all_ret[k], dim=0) for k in all_ret}
         return all_ret
 
+
     def forward(self, batch):
         """
         train:

@@ -96,6 +96,7 @@ class Dataset(data.Dataset):
         self.rays_d = torch.stack(rays_d)                             # [num_imgs, H * W, 3]
         self.imgs = self.imgs.reshape(self.num_imgs, -1, 3)           # [num_imgs, H * W, 3]
 
+
     def __getitem__(self, index):
         """
         Description:
@@ -130,6 +131,7 @@ class Dataset(data.Dataset):
         ret.update({'meta':{'H': self.H, 'W': self.W, 'focal': self.focal, 'N_rays': self.batch_size}})
         return ret
 
+
     def __len__(self):
         """
         Description:
@@ -141,6 +143,7 @@ class Dataset(data.Dataset):
             @len: 训练或者测试的数量
         """
         return self.num_imgs
+
 
     def get_ray(self, X, Y, pose):
         dirs = torch.stack([X, -Y, -torch.ones_like(X)], dim=-1)

@@ -17,12 +17,12 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class Evaluator:
-
     def __init__(self,):
         self.mses = []
         self.psnrs = []
         os.system('mkdir -p ' + cfg.result_dir)
         os.system('mkdir -p ' + cfg.result_dir + '/vis')
+
 
     def evaluate(self, output, batch):
         pred_rgb = output['rgb1'][0].detach().cpu().numpy()             # [H * W, 3]
@@ -33,6 +33,7 @@ class Evaluator:
 
         psnr_item = psnr(gt_rgb, pred_rgb, data_range=1.)
         self.psnrs.append(psnr_item)
+
 
     def summarize(self):
         ret = {}

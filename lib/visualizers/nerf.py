@@ -16,6 +16,7 @@ class Visualizer:
         print(colored('the results are saved at {}'.format(self.result_dir), 'yellow'))
         os.system('mkdir -p {}'.format(self.result_dir))
 
+
     def visualize(self, output, batch):
         white_bkgd = cfg.task_arg.white_bkgd
         rgb_pred = output['rgb1'][0].detach().cpu().numpy()     # [H * W, 3]
@@ -42,6 +43,7 @@ class Visualizer:
         # ax1.imshow(pred_img)
         # ax2.imshow(gt_img)
         # plt.show()
+
 
     def summarize(self):
         # TODO

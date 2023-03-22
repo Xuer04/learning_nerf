@@ -3,12 +3,14 @@ import torch.nn as nn
 from lib.utils import net_utils
 from lib.config import cfg
 
+
 class NetworkWrapper(nn.Module):
     def __init__(self, net, train_loader):
         super(NetworkWrapper, self).__init__()
         self.net = net
         self.color_crit = nn.MSELoss(reduction='mean')
         self.mse2psnr = lambda x : -10. * torch.log(x) / torch.log(torch.Tensor([10.]))
+
 
     def forward(self, batch):
         output = self.net(batch)
