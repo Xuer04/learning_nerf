@@ -18,6 +18,7 @@ class Network(nn.Module):
                 nn.Sigmoid()
                 )
 
+
     def forward_network(self, xyz, xyz_dir, network):
         N_rays, N_samples = xyz.shape[:2]
         xyz, xyz_dir = xyz.reshape(-1, xyz.shape[-1]), xyz_dir.reshape(-1, xyz_dir.shape[-1])
@@ -25,6 +26,7 @@ class Network(nn.Module):
         dir_encoding = self.dir_encoder(xyz_dir)
         net_output = network(torch.cat([xyz_encoding, dir_encoding], dim=-1))
         return net_output.reshape(N_rays, N_samples, -1)
+
 
     def render(self, uv, batch):
         uv_encoding = self.uv_encoder(uv)
@@ -34,6 +36,7 @@ class Network(nn.Module):
             x = F.relu(x)
         rgb = self.output_layer(x)
         return {'rgb': rgb}
+
 
     def batchify(self, uv, batch):
         all_ret = {}
@@ -46,6 +49,7 @@ class Network(nn.Module):
                 all_ret[k].append(ret[k])
         all_ret = {k: torch.cat(all_ret[k], dim=0) for k in all_ret}
         return all_ret
+
 
     def forward(self, batch):
         B, N_pixels, C = batch['uv'].shape

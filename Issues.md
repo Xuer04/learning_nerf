@@ -77,4 +77,7 @@ Python 字典数据格式化写入 JSON 文件时不支持`np.float32`类型，�
 
 ```py
 ret = {item: float(ret[item]) for item in ret}
+
+# 另一种方法
+ret = {item: ret[item].astype(float) for item in ret}
 ```
