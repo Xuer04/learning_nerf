@@ -13,31 +13,24 @@ from torch.utils.data import DataLoader, ConcatDataset
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 
-def _dataset_factory(is_train, is_val):
+def _dataset_factory(is_train, is_val=False):
     if is_val:
         module = cfg.val_dataset_module
         path = cfg.val_dataset_path
     elif is_train:
         module = cfg.train_dataset_module
         path = cfg.train_dataset_path
+        args = cfg.train_dataset
     else:
         module = cfg.test_dataset_module
         path = cfg.test_dataset_path
-    dataset = imp.load_source(module, path).Dataset
+        args = cfg.test_dataset
+    dataset = imp.load_source(module, path).Dataset(**args)
     return dataset
 
 
 def make_dataset(cfg, is_train=True):
-    if is_train:
-        args = cfg.train_dataset
-        module = cfg.train_dataset_module
-        path = cfg.train_dataset_path
-    else:
-        args = cfg.test_dataset
-        module = cfg.test_dataset_module
-        path = cfg.test_dataset_path
-    dataset = imp.load_source(module, path).Dataset
-    dataset = dataset(**args)
+    dataset = _dataset_factory(is_train)
     return dataset
 
 
@@ -61,15 +54,12 @@ def make_batch_data_sampler(cfg, sampler, batch_size, drop_last, max_iter,
         sampler_meta = cfg.test.sampler_meta
 
     if batch_sampler == 'default':
-        batch_sampler = torch.utils.data.sampler.BatchSampler(
-            sampler, batch_size, drop_last)
+        batch_sampler = torch.utils.data.sampler.BatchSampler(sampler, batch_size, drop_last)
     elif batch_sampler == 'image_size':
-        batch_sampler = samplers.ImageSizeBatchSampler(sampler, batch_size,
-                                                       drop_last, sampler_meta)
+        batch_sampler = samplers.ImageSizeBatchSampler(sampler, batch_size, drop_last, sampler_meta)
 
     if max_iter != -1:
-        batch_sampler = samplers.IterationBasedBatchSampler(
-            batch_sampler, max_iter)
+        batch_sampler = samplers.IterationBasedBatchSampler(batch_sampler, max_iter)
     return batch_sampler
 
 

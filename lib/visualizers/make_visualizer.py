@@ -2,8 +2,8 @@ import imp
 import os
 
 def _visualizer_factory(cfg, is_train):
+    module = cfg.visualizer_module
     path = cfg.visualizer_path
-    module = path[:-3].replace('/', '.')
     visualizer = imp.load_source(module, path).Visualizer(is_train)
     return visualizer
 

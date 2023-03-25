@@ -128,7 +128,7 @@ class Dataset(data.Dataset):
             img_rgb = self.imgs[index]  # [H * W, 3]
 
         ret = {'ray_o': ray_o, 'ray_d': ray_d, 'rgb': img_rgb}
-        ret.update({'meta':{'H': self.H, 'W': self.W, 'focal': self.focal, 'N_rays': self.batch_size}})
+        ret.update({'meta':{'H': self.H, 'W': self.W, 'ratio': self.input_ratio, 'N_rays': self.batch_size}})
         return ret
 
 

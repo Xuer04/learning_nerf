@@ -20,19 +20,29 @@ class Evaluator:
     def __init__(self,):
         self.mses = []
         self.psnrs = []
-        os.system('mkdir -p ' + cfg.result_dir)
-        os.system('mkdir -p ' + cfg.result_dir + '/vis')
 
 
     def evaluate(self, output, batch):
-        pred_rgb = output['rgb1'][0].detach().cpu().numpy()             # [H * W, 3]
-        gt_rgb = batch['rgb'][0].detach().cpu().numpy()                 # [H * W, 3]
+        rgb_pred = output['rgb_map'][0].detach().cpu().numpy()
+        rgb_gt = batch['rgb'][0].detach().cpu().numpy()
+        H, W, ratio = batch['meta']['H'].item(), batch['meta']['W'].item(), batch['meta']['ratio'].item()
+        H, W = int(H * ratio), int(W * ratio)
 
-        mse_item = np.mean((pred_rgb - gt_rgb)**2)
-        self.mses.append(mse_item)
+        white_bkgd = int(cfg.task_arg.white_bkgd)
+        img_pred = np.zeros((H, W, 3)) + white_bkgd
+        img_pred = rgb_pred
+        img_gt = np.zeros((H, W, 3)) + white_bkgd
+        img_gt = rgb_gt
 
-        psnr_item = psnr(gt_rgb, pred_rgb, data_range=1.)
-        self.psnrs.append(psnr_item)
+        # if cfg.eval_whole_img:
+        #     rgb_pred = img_pred
+        #     rgb_gt = img_gt
+
+        mses = np.mean((rgb_pred - rgb_gt)**2)
+        self.mses.append(mses)
+
+        psnrs = psnr(rgb_gt, rgb_pred, data_range=1.)
+        self.psnrs.append(psnrs)
 
 
     def summarize(self):
