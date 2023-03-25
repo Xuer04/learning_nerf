@@ -44,7 +44,6 @@ network:
   nerf:
     W: 256 # width of network
     D: 8 # depth of network
-    use_viewdirs: 1 # whether depend on view
     skips: [4]
   xyz_encoder: # encoder for location
     type: "frequency"

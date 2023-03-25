@@ -68,8 +68,8 @@ class Network(nn.Module):
         self.chunk = cfg.task_arg.chunk_size
         self.batch_size = cfg.task_arg.N_rays
         self.white_bkgd = cfg.task_arg.white_bkgd
+        self.use_viewdirs = cfg.task_arg.use_viewdirs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.use_viewdirs = cfg.network.nerf.use_viewdirs
 
         # encoder
         self.embed_fn, self.input_ch = get_encoder(cfg.network.xyz_encoder)

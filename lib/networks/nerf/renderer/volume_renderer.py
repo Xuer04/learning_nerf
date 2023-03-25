@@ -8,6 +8,7 @@ class Renderer:
     def __init__(self, net):
         self.net = net
 
+
     def render_rays(self, ray_batch, net_c=None, pytest=False):
         N_rays = ray_batch.shape[0]
         rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
@@ -91,9 +92,9 @@ class Renderer:
 
         return ret
 
+
     def batchify_rays(self, rays_flat, chunk=1024 * 32):
-        """Render rays in smaller minibatches to avoid OOM.
-        """
+        """Render rays in smaller minibatches to avoid OOM."""
         all_ret = {}
         for i in range(0, rays_flat.shape[0], chunk):
             ret = self.render_rays(rays_flat[i:i + chunk])
@@ -103,6 +104,7 @@ class Renderer:
                 all_ret[k].append(ret[k])
         all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret}
         return all_ret
+
 
     def render(self, batch):
         rays_o = batch['ray_o']
