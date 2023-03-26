@@ -34,9 +34,9 @@ class Evaluator:
         img_gt = np.zeros((H, W, 3)) + white_bkgd
         img_gt = rgb_gt
 
-        # if cfg.eval_whole_img:
-        #     rgb_pred = img_pred
-        #     rgb_gt = img_gt
+        if cfg.eval.whole_img:
+            rgb_pred = img_pred
+            rgb_gt = img_gt
 
         mses = np.mean((rgb_pred - rgb_gt)**2)
         self.mses.append(mses)

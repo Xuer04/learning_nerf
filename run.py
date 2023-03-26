@@ -7,8 +7,9 @@ def run_dataset():
     from lib.datasets import make_data_loader
 
     cfg.train.num_workers = 0
-    data_loader = make_data_loader(cfg, is_train=False)
+    data_loader = make_data_loader(cfg, is_train=True)
     for batch in tqdm.tqdm(data_loader):
+        print(f"num_iter: {batch['num_iter']}")
         pass
 
 
@@ -46,14 +47,13 @@ def run_evaluate():
     from lib.evaluators import make_evaluator
     from lib.networks import make_network
     from lib.networks.nerf.renderer import make_renderer
-    from lib.utils import net_utils
-    from lib.utils.data_utils import to_cuda
+    from lib.utils.net_utils import load_network
 
     network = make_network(cfg).cuda()
-    net_utils.load_network(network,
-                           cfg.trained_model_dir,
-                           resume=cfg.resume,
-                           epoch=cfg.test.epoch)
+    load_network(network,
+                 cfg.trained_model_dir,
+                 resume=cfg.resume,
+                 epoch=cfg.test.epoch)
     network.eval()
 
     data_loader = make_data_loader(cfg, is_train=False)
@@ -61,7 +61,9 @@ def run_evaluate():
     renderer = make_renderer(cfg, network)
     net_time = []
     for batch in tqdm.tqdm(data_loader):
-        batch = to_cuda(batch)
+        for k in batch:
+            if k != 'meta':
+                batch[k] = batch[k].cuda()
         with torch.no_grad():
             torch.cuda.synchronize()
             start_time = time.time()

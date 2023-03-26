@@ -85,6 +85,9 @@ train:
 test:
   batch_size: 1
 
+eval:
+  whole_img: False
+
 ep_iter: 500 # number of iterations in each epoch
 save_ep: 20
 eval_ep: 20 # 10000 iterations

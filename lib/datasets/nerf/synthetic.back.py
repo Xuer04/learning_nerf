@@ -4,6 +4,7 @@ import numpy as np
 import os
 from lib.utils import data_utils
 from lib.config import cfg
+from torchvision import transforms as T
 import imageio
 import json
 import cv2
@@ -28,7 +29,7 @@ class Dataset(data.Dataset):
         self.white_bkgd = cfg.task_arg.white_bkgd
         self.num_iter = 0
         self.use_batching = not cfg.task_arg.no_batching
-        # cams = kwargs['cams']
+        cams = kwargs['cams']
         self.precrop_iters = cfg.task_arg.precrop_iters
         self.precrop_frac = cfg.task_arg.precrop_frac
         self.batch_size = cfg.task_arg.N_rays
@@ -36,7 +37,7 @@ class Dataset(data.Dataset):
         # read all images and poses
         imgs = []
         poses = []
-        # json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format(self.split))))
+        json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format(self.split))))
         json_info = json.load(open(os.path.join(self.data_root, 'transforms_{}.json'.format('train'))))
         for frame in json_info['frames']:
             img_path = os.path.join(self.data_root, frame['file_path'][2:] + '.png')
@@ -74,17 +75,15 @@ class Dataset(data.Dataset):
         self.focal = focal
 
         # set t_x, t_y
-        X, Y = torch.meshgrid(torch.arange(self.W), torch.arange(self.H), indexing='xy')
+        X, Y = torch.meshgrid(torch.arange(W), torch.arange(H), indexing='xy')
         self.t_x = (X - self.W * 0.5) / self.focal
         self.t_y = (Y - self.H * 0.5) / self.focal
 
         # set args for center crop
-        self.precrop_index = torch.arange(self.W * self.H).view(self.H, self.W)  # [H, W]
+        self.precrop_index = torch.arange(self.W * self.H).view(self.H, self.W)
         dH = int(self.H // 2 * self.precrop_frac)
         dW = int(self.W // 2 * self.precrop_frac)
-        self.precrop_index = self.precrop_index[self.H // 2 - dH:self.H // 2 + dH,
-                                                self.W // 2 - dW:self.W // 2 + dW]  # [H//2, W//2]
-        self.precrop_index = self.precrop_index.reshape(-1)  # [H//2 * W//2]
+        self.precrop_index = self.precrop_index[self.H // 2 - dH:self.H // 2 + dH, self.W // 2 - dW:self.W // 2 + dW].reshape(-1)
 
         rays_o, rays_d = [], []
 
@@ -119,14 +118,14 @@ class Dataset(data.Dataset):
                 ray_os = ray_os[self.precrop_index]
                 img_rgbs = img_rgbs[self.precrop_index]
             select_ids = np.random.choice(ray_ds.shape[0], self.batch_size, replace=False)
-            ray_d = ray_ds[select_ids]                      # [1, N_rays, 3]
-            ray_o = ray_os[select_ids]                      # [1, N_rays, 3]
-            img_rgb = img_rgbs[select_ids]                  # [1, N_rays, 3]
-            rays = torch.stack([ray_o, ray_d], 0)           # [1, 2, N_rays, 3]
+            ray_d = ray_ds[select_ids]                      # [N_rays, 3]
+            ray_o = ray_os[select_ids]                      # [N_rays, 3]
+            img_rgb = img_rgbs[select_ids]                  # [N_rays, 3]
+            rays = torch.stack([ray_o, ray_d], 0)           # [N_rays, 3]
         else:
-            ray_d = self.rays_d[index]  # [1, H * W, 3]
-            ray_o = self.rays_o[index]  # [1, H * W, 3]
-            img_rgb = self.imgs[index]  # [1, H * W, 3]
+            ray_d = self.rays_d[index]  # [H * W, 3]
+            ray_o = self.rays_o[index]  # [H * W, 3]
+            img_rgb = self.imgs[index]  # [H * W, 3]
 
         ret = {'ray_o': ray_o, 'ray_d': ray_d, 'rgb': img_rgb}
         ret.update({'meta':{'H': self.H, 'W': self.W, 'ratio': self.input_ratio, 'N_rays': self.batch_size}})
