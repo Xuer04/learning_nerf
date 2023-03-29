@@ -85,8 +85,6 @@ class Network(nn.Module):
                           skips=cfg.network.nerf.skips,
                           use_viewdirs=self.use_viewdirs)
 
-        self.grad_vars = list(self.model.parameters())
-
         # fine model
         self.model_fine = NeRF(D=cfg.network.nerf.D,
                                W=cfg.network.nerf.W,
@@ -94,8 +92,6 @@ class Network(nn.Module):
                                input_ch_views=self.input_ch_views,
                                skips=cfg.network.nerf.skips,
                                use_viewdirs=self.use_viewdirs)
-
-        self.grad_vars.extend(list(self.model_fine.parameters()))
 
 
     # def batchify_rays(self, ray_o, ray_d):

@@ -26,3 +26,6 @@ def project(xyz, K, RT):
     xyz = np.dot(xyz, K.T)
     xy = xyz[:, :2] / xyz[:, 2:]
     return xy
+
+def to8b(img):
+    return (255 * np.clip(np.nan_to_num(img), 0, 1)).astype(np.uint8)
