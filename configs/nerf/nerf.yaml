@@ -15,8 +15,8 @@ network_path: 'lib/networks/nerf/network.py'
 renderer_module: 'lib.networks.nerf.renderer.volume_renderer'
 renderer_path: 'lib/networks/nerf/renderer/volume_renderer.py'
 
-loss_module: 'lib.train.losses.nerf'
-loss_path: 'lib/train/losses/nerf.py'
+loss_module: 'lib.train.trainers.nerf'
+loss_path: 'lib/train/trainers/nerf.py'
 
 evaluator_module: 'lib.evaluators.nerf'
 evaluator_path: 'lib/evaluators/nerf.py'
@@ -27,7 +27,7 @@ visualizer_path: 'lib/visualizers/nerf.py'
 task_arg:
   N_rays: 1024 # number of rays in each batch
   chunk_size: 4096 # number of rays processed in parallel
-  white_bkgd: True # use white background
+  white_bkgd: 1 # use white background
   N_samples: 64 # number of samples per ray in coarse network
   N_importance: 128 # number of samples per ray in fine network
   no_batching: True # True for synthetic datasets
@@ -71,6 +71,7 @@ test_dataset:
   W: 800
 
 train:
+  single_view: False
   batch_size: 1
   lr: 5e-4 # learning rate
   weight_decay: 0.
@@ -86,7 +87,7 @@ test:
   batch_size: 1
 
 eval:
-  whole_img: False
+  whole_img: True
 
 ep_iter: 500 # number of iterations in each epoch
 save_ep: 20

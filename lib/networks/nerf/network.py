@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from torch.nn import functional as F
 from lib.networks.encoding import get_encoder
 from lib.config import cfg
@@ -60,6 +61,46 @@ class NeRF(nn.Module):
         return outputs
 
 
+    def load_weights_from_keras(self, weights):
+        assert self.use_viewdirs, "Not implemented if use_viewdirs=False"
+
+        # Load pts_linears
+        for i in range(self.D):
+            idx_pts_linears = 2 * i
+            self.pts_linears[i].weight.data = torch.from_numpy(
+                np.transpose(weights[idx_pts_linears]))
+            self.pts_linears[i].bias.data = torch.from_numpy(
+                np.transpose(weights[idx_pts_linears + 1]))
+
+        # Load feature_linear
+        idx_feature_linear = 2 * self.D
+        self.feature_linear.weight.data = torch.from_numpy(
+            np.transpose(weights[idx_feature_linear]))
+        self.feature_linear.bias.data = torch.from_numpy(
+            np.transpose(weights[idx_feature_linear + 1]))
+
+        # Load views_linears
+        idx_views_linears = 2 * self.D + 2
+        self.views_linears[0].weight.data = torch.from_numpy(
+            np.transpose(weights[idx_views_linears]))
+        self.views_linears[0].bias.data = torch.from_numpy(
+            np.transpose(weights[idx_views_linears + 1]))
+
+        # Load rgb_linear
+        idx_rbg_linear = 2 * self.D + 4
+        self.rgb_linear.weight.data = torch.from_numpy(
+            np.transpose(weights[idx_rbg_linear]))
+        self.rgb_linear.bias.data = torch.from_numpy(
+            np.transpose(weights[idx_rbg_linear + 1]))
+
+        # Load alpha_linear
+        idx_alpha_linear = 2 * self.D + 6
+        self.alpha_linear.weight.data = torch.from_numpy(
+            np.transpose(weights[idx_alpha_linear]))
+        self.alpha_linear.bias.data = torch.from_numpy(
+            np.transpose(weights[idx_alpha_linear + 1]))
+
+
 class Network(nn.Module):
     def __init__(self):
         super(Network, self).__init__()
@@ -94,22 +135,10 @@ class Network(nn.Module):
                                use_viewdirs=self.use_viewdirs)
 
 
-    # def batchify_rays(self, ray_o, ray_d):
-    #     all_ret = {}
-    #     for i in range(0, self.batch_size, self.chunk):
-    #         ret = render_rays(self.model, self.model_fine, ray_o[i:i + self.chunk], ray_d[i:i + self.chunk], self.N_samples, self.device, self.N_importance, self.white_bkgd)
-    #         for k in ret:
-    #             if k not in all_ret:
-    #                 all_ret[k] = []
-    #             all_ret[k].append(ret[k])
-    #     all_ret = {k: torch.cat(all_ret[k], dim=0) for k in all_ret}
-    #     return all_ret
-
-
     def batchify(self, fn, chunk):
         """Constructs a version of 'fn' that applies to smaller batches."""
         def ret(inputs):
-            return torch.cat([fn(inputs[i:i+chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
+            return torch.cat([fn(inputs[i:i + chunk]) for i in range(0, inputs.shape[0], chunk)], 0)
         return ret
 
 

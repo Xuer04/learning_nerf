@@ -7,9 +7,8 @@ def run_dataset():
     from lib.datasets import make_data_loader
 
     cfg.train.num_workers = 0
-    data_loader = make_data_loader(cfg, is_train=True)
+    data_loader = make_data_loader(cfg, is_train=False)
     for batch in tqdm.tqdm(data_loader):
-        print(f"num_iter: {batch['num_iter']}")
         pass
 
 
@@ -56,7 +55,7 @@ def run_evaluate():
                  epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=False)
+    data_loader = make_data_loader(cfg, is_train=True)
     evaluator = make_evaluator(cfg)
     renderer = make_renderer(cfg, network)
     net_time = []
@@ -70,6 +69,7 @@ def run_evaluate():
             output = renderer.render(batch)
             torch.cuda.synchronize()
             end_time = time.time()
+        # print(f"iter test: {batch['meta'['iter_test']]}")
         net_time.append(end_time - start_time)
         evaluator.evaluate(output, batch)
     evaluator.summarize()
