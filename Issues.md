@@ -4,9 +4,23 @@
 
 ### 框架相关
 
-#### 问题 1: TODO
+#### 问题 1: Fixed
 
 训练的时候 loss 一直下不去, 停在 0.4 左右不动
+
+> rendering部分写的有问题, 在sampling的时候near和far写错了, 然后near和far一样, 导致sampling的结果一直为0
+
+之前的代码:
+```py
+bounds = torch.reshape(ray_batch[..., 6:8], [-1, 1, 2])
+near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
+```
+
+Fix 之后的代码:
+```py
+bounds = torch.reshape(ray_batch[..., [6, 8]], [-1, 1, 2])
+near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
+```
 
 ### NeRF 相关
 

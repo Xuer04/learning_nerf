@@ -55,7 +55,7 @@ def run_evaluate():
                  epoch=cfg.test.epoch)
     network.eval()
 
-    data_loader = make_data_loader(cfg, is_train=True)
+    data_loader = make_data_loader(cfg, is_train=False)
     evaluator = make_evaluator(cfg)
     renderer = make_renderer(cfg, network)
     net_time = []

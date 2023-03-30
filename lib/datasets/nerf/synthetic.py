@@ -27,7 +27,6 @@ class Dataset(data.Dataset):
         self.split = split # train or test
         self.white_bkgd = cfg.task_arg.white_bkgd
         self.num_iter_train = 0
-        self.num_iter_test = 0
         self.use_batching = not cfg.task_arg.no_batching
         # cams = kwargs['cams']
         self.precrop_iters = cfg.task_arg.precrop_iters
@@ -140,8 +139,6 @@ class Dataset(data.Dataset):
             rgb = rgbs[select_coords[:, 0], select_coords[:, 1]]      # (N_rays, 3)
 
         else:
-            self.num_iter_test += 1
-
             ray_o = self.rays_o[index].reshape(-1, 3)  # (H * W, 3)
             ray_d = self.rays_d[index].reshape(-1, 3)  # (H * W, 3)
             rgb = self.imgs[index].reshape(-1, 3)      # (H * W, 3)
@@ -152,8 +149,6 @@ class Dataset(data.Dataset):
                 'H': self.H,
                 'W': self.W,
                 'ratio': self.input_ratio,
-                'iter_train': self.num_iter_train,
-                'iter_test': self.num_iter_test,
                 'N_rays': self.batch_size
             }
         })
