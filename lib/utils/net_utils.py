@@ -321,6 +321,10 @@ def load_model(net,
     net.load_state_dict(pretrained_model['net'])
     if 'optim' in pretrained_model:
         optim.load_state_dict(pretrained_model['optim'])
+        for state in optim.state.values():
+            for k, v in state.items():
+                if torch.is_tensor(v):
+                    state[k] = v.cuda()
         scheduler.load_state_dict(pretrained_model['scheduler'])
         recorder.load_state_dict(pretrained_model['recorder'])
         return pretrained_model['epoch'] + 1
@@ -457,5 +461,3 @@ def save_pretrain(net, task, model_dir):
     os.system('mkdir -p ' +  model_dir)
     model = {'net': net.state_dict()}
     torch.save(model, os.path.join(model_dir, 'latest.pth'))
-
-

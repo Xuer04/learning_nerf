@@ -22,6 +22,27 @@ bounds = torch.reshape(ray_batch[..., [6, 8]], [-1, 1, 2])
 near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
 ```
 
+#### 问题 2: Fixed
+
+训练中途结束后，如果要加载预训练模型继续训练时，会报错
+
+报错信息:
+```py
+>>> optimizer.step()
+RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+```
+
+原因分析:
+
+当从与训练模型中加载 optimizer 的参数时，默认是在 CPU 上的，因此需要在`load_model`的时候把 optimizer 的参数传到 cuda 里，代码如下:
+```py
+optim.load_state_dict(pretrained_model['optim'])
+for state in optim.state.values():
+    for k, v in state.items():
+        if torch.is_tensor(v):
+            state[k] = v.cuda()
+```
+
 ### NeRF 相关
 
 #### 问题 1:

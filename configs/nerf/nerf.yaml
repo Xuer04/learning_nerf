@@ -1,5 +1,5 @@
 task: nerf
-gpus: [3] # set gpu device number
+gpus: [2] # set gpu device number
 exp_name: "nerf"
 scene: "lego"
 
