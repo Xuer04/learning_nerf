@@ -24,7 +24,7 @@ near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
 
 #### 问题 2: Fixed
 
-训练中途结束后，如果要加载预训练模型继续训练时，会报错
+训练中途结束后，如果要加载预训练模型继续训练时，会报错，报错位置为这个文件 [/lib/utils/net_utils.py](https://github.com/Xuer04/learning_nerf/blob/master/lib/utils/net_utils.py#L323)
 
 报错信息:
 ```py
