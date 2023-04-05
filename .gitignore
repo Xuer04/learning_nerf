@@ -11,3 +11,4 @@ __pycache__/
 *.ipynb
 *.png
 *.pyc
+*.out
