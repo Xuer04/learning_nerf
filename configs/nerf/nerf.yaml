@@ -76,7 +76,7 @@ train:
   batch_size: 1
   lr: 5e-4 # learning rate
   weight_decay: 0.
-  epoch: 400
+  epoch: 600
   optim: 'adam'
   scheduler:
     type: "exponential"
@@ -91,7 +91,7 @@ eval:
   whole_img: True
 
 ep_iter: 500 # number of iterations in each epoch
-save_ep: 20
-eval_ep: 20 # 10000 iterations
-save_latest_ep: 5 # 2500 iterations
+save_ep: 40
+eval_ep: 40 # 20000 iterations
+save_latest_ep: 10 # 5000 iterations
 log_interval: 10

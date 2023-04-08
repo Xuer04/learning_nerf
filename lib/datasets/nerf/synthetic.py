@@ -9,6 +9,46 @@ import json
 import cv2
 
 
+def trans_t(t):
+    return np.array([
+        [1,0,0,0],
+        [0,1,0,0],
+        [0,0,1,t],
+        [0,0,0,1],
+    ], dtype=np.float32)
+
+def rot_phi(phi):
+    return np.array([
+        [1,0,0,0],
+        [0,np.cos(phi),-np.sin(phi),0],
+        [0,np.sin(phi), np.cos(phi),0],
+        [0,0,0,1],
+    ], dtype=np.float32)
+
+def rot_theta(th) :
+    return np.array([
+        [np.cos(th),0,-np.sin(th),0],
+        [0,1,0,0],
+        [np.sin(th),0, np.cos(th),0],
+        [0,0,0,1],
+    ], dtype=np.float32)
+
+def pose_spherical(theta, phi, radius):
+    """
+    Input:
+        @theta: [-180, +180]，间隔为 9
+        @phi: 固定值 -30
+        @radius: 固定值 4
+    Output:
+        @c2w: 从相机坐标系到世界坐标系的变换矩阵
+    """
+    c2w = trans_t(radius)
+    c2w = rot_phi(phi/180.*np.pi) @ c2w
+    c2w = rot_theta(theta/180.*np.pi) @ c2w
+    c2w = np.array([[-1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]]) @ c2w
+    return c2w
+
+
 class Dataset(data.Dataset):
     def __init__(self, **kwargs):
         """
@@ -33,6 +73,7 @@ class Dataset(data.Dataset):
         self.precrop_frac = cfg.task_arg.precrop_frac
         self.batch_size = cfg.task_arg.N_rays
         self.use_single_view = cfg.train.single_view
+        self.render_only = True
 
         # read all images and poses
         imgs = []
@@ -106,7 +147,7 @@ class Dataset(data.Dataset):
         self.rays_o = torch.stack(rays_o)                    # (num_imgs, H, W, 3)
         self.rays_d = torch.stack(rays_d)                    # (num_imgs, H, W, 3)
         # self.imgs = self.imgs.reshape(self.num_imgs, -1, 3)  # (num_imgs, H * W, 3)
-
+        self.render_rays_o, self.render_rays_d = self.get_render_rays()  # (40, H, W, 3)
 
     def __getitem__(self, index):
         """
@@ -128,7 +169,8 @@ class Dataset(data.Dataset):
             ray_ds = self.rays_d[index]  # (H, W, 3)
             rgbs = self.imgs[index]      # (H, W, 3)
 
-            coords = self.coords_center if self.num_iter_train < self.precrop_iters else self.coords
+            # coords = self.coords_center if self.num_iter_train < self.precrop_iters else self.coords
+            coords = self.coords
             coords = torch.reshape(coords, [-1, 2])
             select_ids = np.random.choice(coords.shape[0], size=self.batch_size, replace=False)
             select_coords = coords[select_ids].long()
@@ -149,7 +191,9 @@ class Dataset(data.Dataset):
                 'H': self.H,
                 'W': self.W,
                 'ratio': self.input_ratio,
-                'N_rays': self.batch_size
+                'N_rays': self.batch_size,
+                'id': index,
+                'num_imgs': self.num_imgs
             }
         })
         return ret
@@ -175,3 +219,18 @@ class Dataset(data.Dataset):
         rays_d = torch.sum(dirs[..., np.newaxis, :] * c2w[:3, :3], -1)
         rays_o = c2w[:3, -1].expand(rays_d.shape)
         return rays_o, rays_d
+
+
+    def get_render_rays(self):
+        self.render_poses = np.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180, 180, 40 + 1)[:-1]], 0)
+        self.render_poses = torch.from_numpy(self.render_poses)
+        render_rays_o, render_rays_d = [], []
+
+        for i in range(self.render_poses.shape[0]):
+            render_ray_o, render_ray_d = self.get_rays(self.H, self.W, self.K, self.render_poses[i, :3, :4])
+            render_rays_o.append(render_ray_o)   # (H, W, 3)
+            render_rays_d.append(render_ray_d)   # (H, W, 3)
+
+        render_rays_o = torch.stack(render_rays_o)                    # (40, H, W, 3)
+        render_rays_d = torch.stack(render_rays_d)                    # (40, H, W, 3)
+        return render_rays_o, render_rays_d

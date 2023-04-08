@@ -102,14 +102,15 @@ def run_visualize():
     data_loader = make_data_loader(cfg, is_train=False)
     renderer = make_renderer(cfg, network)
     visualizer = make_visualizer(cfg, is_train=False)
-    for batch in tqdm.tqdm(data_loader):
-        batch = to_cuda(batch)
-        with torch.no_grad():
-            output = renderer.render(batch)
-        visualizer.visualize(output, batch)
+    # for batch in tqdm.tqdm(data_loader):
+    #     batch = to_cuda(batch)
+    #     with torch.no_grad():
+    #         output = renderer.render(batch)
+    #     visualizer.visualize(output, batch)
 
     if visualizer.write_video:
         visualizer.summarize()
+
 
 if __name__ == '__main__':
     globals()['run_' + args.type]()
