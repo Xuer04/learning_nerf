@@ -14,7 +14,7 @@ class Renderer:
         rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
         viewdirs = ray_batch[:, -3:] if ray_batch.shape[-1] > 8 else None
         bounds = torch.reshape(ray_batch[..., [6, 8]], [-1, 1, 2])
-        # have some bug here, near and far with the shape of (N_rays, 2)
+        # Fix some bug here, near and far with the shape of (N_rays, 2)
         # bounds = torch.reshape(ray_batch[..., 6:8], [-1, 1, 2])
         near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
 

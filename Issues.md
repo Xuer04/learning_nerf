@@ -1,28 +1,10 @@
 ## 记录一下复现过程中出现的问题
 
-**TODO 表示还没解决**
+**Todo 表示还没解决, Fixed 表示解决了**
 
 ### 框架相关
 
 #### 问题 1: Fixed
-
-训练的时候 loss 一直下不去, 停在 0.4 左右不动
-
-> rendering部分写的有问题, 在sampling的时候near和far写错了, 然后near和far一样, 导致sampling的结果一直为0
-
-之前的代码:
-```py
-bounds = torch.reshape(ray_batch[..., 6:8], [-1, 1, 2])
-near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
-```
-
-Fix 之后的代码:
-```py
-bounds = torch.reshape(ray_batch[..., [6, 8]], [-1, 1, 2])
-near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
-```
-
-#### 问题 2: Fixed
 
 训练中途结束后，如果要加载预训练模型继续训练时，会报错，报错位置为这个文件 [/lib/utils/net_utils.py](https://github.com/Xuer04/learning_nerf/blob/master/lib/utils/net_utils.py#L323)
 
@@ -45,7 +27,7 @@ for state in optim.state.values():
 
 ### NeRF 相关
 
-#### 问题 1:
+#### 问题 1: Fixed
 
 - 在光线采样的时候, 为了防止 OOM, 使用了`chunk_size`, `N_rays`的默认值是 1024, `chunk_size`的默认值是 4096, 好像没有起到 **batchify** 的作用?
 
@@ -55,9 +37,27 @@ for state in optim.state.values():
 
 > 可以不用做, 在`batchify_rays`的时候做就可以了
 
+#### 问题 2: Fixed
+
+训练的时候 loss 一直下不去, 停在 0.4 左右不动
+
+> rendering部分写的有问题, 在sampling的时候near和far写错了, 然后near和far一样, 导致sampling的结果一直为0
+
+之前的代码:
+```py
+bounds = torch.reshape(ray_batch[..., 6:8], [-1, 1, 2])
+near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
+```
+
+Fix 之后的代码:
+```py
+bounds = torch.reshape(ray_batch[..., [6, 8]], [-1, 1, 2])
+near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
+```
+
 ### Pytorch 相关
 
-#### 问题 1:
+#### 问题 1: Fixed
 
 报错信息:
 ```py
@@ -96,7 +96,7 @@ tensor([2, 3, 4], device='cuda:0')
 
 ### NumPy 相关
 
-#### 问题 1:
+#### 问题 1: Fixed
 
 报错信息:
 

@@ -116,7 +116,6 @@ class Network(nn.Module):
         self.embed_fn, self.input_ch = get_encoder(cfg.network.xyz_encoder)
         self.embeddirs_fn, self.input_ch_views = get_encoder(cfg.network.dir_encoder)
 
-        # print(f"Device: {self.device}")
 
         # coarse model
         self.model = NeRF(D=cfg.network.nerf.D,

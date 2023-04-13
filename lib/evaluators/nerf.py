@@ -19,7 +19,6 @@ class Evaluator:
         self.psnr = []
         self.ssim = []
         self.imgs = []
-        # self.iter = 0
 
 
     def psnr_metric(self, img_pred, img_gt):
@@ -29,8 +28,6 @@ class Evaluator:
 
 
     def ssim_metric(self, img_pred, img_gt, batch, id, num_imgs):
-        # self.iter += 1
-        # result_dir = os.path.join(cfg.result_dir, 'comparison')
         result_dir = os.path.join(cfg.result_dir, 'images')
         os.system('mkdir -p {}'.format(result_dir))
         cv2.imwrite(
@@ -44,11 +41,10 @@ class Evaluator:
         img_pred = (img_pred * 255).astype(np.uint8)
         self.imgs.append(img_pred)
 
-        # if len(self.imgs) == num_imgs:
-        #     video_result_file = os.path.join(cfg.result_dir, 'videos', 'video.mp4')
-        #     print(f"Write images to video file {video_result_file}")
-        #     # imageio.mimwrite(video_result_file, self.imgs, fps=30, quality=10)
-        #     imageio.mimwrite(video_result_file, self.imgs, fps=10, quality=10)
+        if len(self.imgs) == num_imgs:
+            video_result_file = os.path.join(cfg.result_dir, 'videos', 'video.mp4')
+            print(f"Write images to video file {video_result_file}")
+            imageio.mimwrite(video_result_file, self.imgs, fps=30, quality=10)
 
         # compute the ssim
         # ssim = compare_ssim(img_pred, img_gt, win_size=101, full=True)
@@ -62,10 +58,7 @@ class Evaluator:
         H, W = batch['meta']['H'].item(), batch['meta']['W'].item()
         id, num_imgs = batch['meta']['id'].item()+1, batch['meta']['num_imgs'].item()
 
-        # white_bkgd = int(cfg.task_arg.white_bkgd)
-        # img_pred = np.zeros((H, W, 3)) + white_bkgd
         img_pred = np.reshape(rgb_pred, (H, W, 3))
-        # img_gt = np.zeros((H, W, 3)) + white_bkgd
         img_gt = np.reshape(rgb_gt, (H, W, 3))
 
         # if cfg.eval.whole_img:
