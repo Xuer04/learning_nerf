@@ -113,5 +113,4 @@ class Renderer:
         ts = ts.reshape(-1, 1)
         ret = self.batchify_rays(rays, ts, cfg.task_arg.chunk_size)
         ret = {k: v.view(*sh[:-1], -1) for k, v in ret.items()}
-        print(f"rgb map shape: {ret['rgb_map'].shape}")
         return ret

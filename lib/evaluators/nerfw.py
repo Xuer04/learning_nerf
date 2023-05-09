@@ -77,8 +77,6 @@ class Evaluator:
         rgb_gt = batch['rgbs'][0].detach().cpu().numpy()
         H, W, id = batch['meta']['H'].item(), batch['meta']['W'].item(), batch['meta']['id'].item()
 
-        print(f"rgb_pred shape: {rgb_pred.shape}")
-        print(f"rgb_gt shape: {rgb_gt.shape}")
         img_pred = np.reshape(rgb_pred, (H, W, 3))
         img_gt = np.reshape(rgb_gt, (H, W, 3))
 

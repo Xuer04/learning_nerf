@@ -71,7 +71,6 @@ def run_evaluate():
             output = renderer.render(batch)
             torch.cuda.synchronize()
             end_time = time.time()
-        # print(f"iter test: {batch['meta'['iter_test']]}")
         net_time.append(end_time - start_time)
         evaluator.evaluate(output, batch)
     evaluator.summarize()
