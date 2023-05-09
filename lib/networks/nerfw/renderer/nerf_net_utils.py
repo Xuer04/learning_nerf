@@ -1,6 +1,6 @@
 import torch.nn.functional as F
 import torch
-from lib.config import cfg
+from einops import rearrange, reduce, repeat
 
 
 def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False):
@@ -29,36 +29,43 @@ def raw2outputs(raw, z_vals, rays_d, raw_noise_std=0, white_bkgd=False):
 
     return rgb_map, disp_map, acc_map, weights, depth_map
 
+def sample_pdf(bins, weights, N_importance, det=False, eps=1e-5):
+    """
+    Sample @N_importance samples from @bins with distribution defined by @weights.
+    Inputs:
+        bins: (N_rays, N_samples_+1) where N_samples_ is "the number of coarse samples per ray - 2"
+        weights: (N_rays, N_samples_)
+        N_importance: the number of samples to draw from the distribution
+        det: deterministic or not
+        eps: a small number to prevent division by zero
+    Outputs:
+        samples: the sampled samples
+    """
+    N_rays, N_samples_ = weights.shape
+    weights = weights + eps # prevent division by zero (don't do inplace op!)
+    pdf = weights / reduce(weights, 'n1 n2 -> n1 1', 'sum') # (N_rays, N_samples_)
+    cdf = torch.cumsum(pdf, -1) # (N_rays, N_samples), cumulative distribution function
+    cdf = torch.cat([torch.zeros_like(cdf[: ,:1]), cdf], -1)  # (N_rays, N_samples_+1)
+                                                               # padded to 0~1 inclusive
 
-# Hierarchical sampling (section 5.2)
-def sample_pdf(bins, weights, N_samples, det=False):
-    # Get pdf
-    weights = weights + 1e-5  # prevent nans
-    pdf = weights / torch.sum(weights, -1, keepdim=True)
-    cdf = torch.cumsum(pdf, -1)
-    cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], -1)  # (batch, len(bins))
-
-    # Take uniform samples
     if det:
-        u = torch.linspace(0., 1., steps=N_samples).to(cdf)
-        u = u.expand(list(cdf.shape[:-1]) + [N_samples])
+        u = torch.linspace(0, 1, N_importance, device=bins.device)
+        u = u.expand(N_rays, N_importance)
     else:
-        u = torch.rand(list(cdf.shape[:-1]) + [N_samples]).to(cdf)
-
-    # Invert CDF
+        u = torch.rand(N_rays, N_importance, device=bins.device)
     u = u.contiguous()
-    inds = torch.searchsorted(cdf, u, side='right')
-    below = torch.max(torch.zeros_like(inds - 1), inds - 1)
-    above = torch.min((cdf.shape[-1] - 1) * torch.ones_like(inds), inds)
-    inds_g = torch.stack([below, above], -1)  # (batch, N_samples, 2)
 
-    matched_shape = [inds_g.shape[0], inds_g.shape[1], cdf.shape[-1]]
-    cdf_g = torch.gather(cdf.unsqueeze(1).expand(matched_shape), 2, inds_g)
-    bins_g = torch.gather(bins.unsqueeze(1).expand(matched_shape), 2, inds_g)
+    inds = torch.searchsorted(cdf, u, right=True)
+    below = torch.clamp_min(inds-1, 0)
+    above = torch.clamp_max(inds, N_samples_)
 
-    denom = (cdf_g[..., 1] - cdf_g[..., 0])
-    denom = torch.where(denom < 1e-5, torch.ones_like(denom), denom)
-    t = (u - cdf_g[..., 0]) / denom
-    samples = bins_g[..., 0] + t * (bins_g[..., 1] - bins_g[..., 0])
+    inds_sampled = rearrange(torch.stack([below, above], -1), 'n1 n2 c -> n1 (n2 c)', c=2)
+    cdf_g = rearrange(torch.gather(cdf, 1, inds_sampled), 'n1 (n2 c) -> n1 n2 c', c=2)
+    bins_g = rearrange(torch.gather(bins, 1, inds_sampled), 'n1 (n2 c) -> n1 n2 c', c=2)
 
+    denom = cdf_g[...,1]-cdf_g[...,0]
+    denom[denom<eps] = 1 # denom equals 0 means a bin has weight 0, in which case it will not be sampled
+                         # anyway, therefore any value for it is fine (set to 1 here)
+
+    samples = bins_g[...,0] + (u-cdf_g[...,0])/denom * (bins_g[...,1]-bins_g[...,0])
     return samples

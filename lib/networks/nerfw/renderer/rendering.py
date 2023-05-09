@@ -109,18 +109,30 @@ class Renderer:
 
 
     def render(self, batch):
-        rays_o = batch['ray_o']
-        rays_d = batch['ray_d']
-        near = 2.
-        far = 6.
+        """Do batched inference on rays using chunk."""
+        rays, ts = batch['rays'], batch['ts']
+        rays = rays.reshape(-1, 8)
+        ts = ts.reshape(-1)
+        sh = rays.shape[0]
+        chunk_size = cfg.task_arg.chunk_size
+        # results = defaultdict(list)
+        # for i in range(0, sh, chunk_size):
+        #     rendered_ray_chunks = \
+        #         render_rays(self.models,
+        #                     self.embeddings,
+        #                     rays[i:i+chunk_size],
+        #                     ts[i:i+chunk_size],
+        #                     cfg.task_arg.N_samples,
+        #                     cfg.task_arg.use_disp,
+        #                     cfg.task_arg.perturb,
+        #                     cfg.task_arg.raw_noise_std,
+        #                     cfg.task_arg.N_importance,
+        #                     chunk_size, # chunk size is effective in val mode
+        #                     cfg.task_arg.white_bkgd)
 
-        sh = rays_o.shape
-        rays_o, rays_d = rays_o.view(-1, 3), rays_d.view(-1, 3)
-        near, far = near * torch.ones_like(rays_d[..., :-1]), far * torch.ones_like(rays_d[..., :-1])
-        viewdirs = rays_d
-        viewdirs = viewdirs / torch.norm(viewdirs, dim=-1, keepdim=True)
-        rays = torch.cat([rays_o, rays_d, near, far, viewdirs], dim=-1)
-        ret = self.batchify_rays(rays, cfg.task_arg.chunk_size)
-        ret = {k: v.view(*sh[:-1], -1) for k, v in ret.items()}
-        ret['depth_map'] = ret['depth_map'].view(*sh[:-1])
-        return ret
+        #     for k, v in rendered_ray_chunks.items():
+        #         results[k] += [v]
+
+        # for k, v in results.items():
+        #     results[k] = torch.cat(v, 0)
+        # return results

@@ -45,7 +45,6 @@ def run_evaluate():
     from lib.datasets import make_data_loader
     from lib.evaluators import make_evaluator
     from lib.networks import make_network
-    from lib.networks.nerf.renderer import make_renderer
     from lib.utils.net_utils import load_network
 
     network = make_network(cfg).cuda()
@@ -57,7 +56,6 @@ def run_evaluate():
 
     data_loader = make_data_loader(cfg, is_train=False)
     evaluator = make_evaluator(cfg)
-    renderer = make_renderer(cfg, network)
     net_time = []
     for batch in tqdm.tqdm(data_loader):
         for k in batch:
@@ -66,7 +64,7 @@ def run_evaluate():
         with torch.no_grad():
             torch.cuda.synchronize()
             start_time = time.time()
-            output = renderer.render(batch)
+            output = network(batch)
             torch.cuda.synchronize()
             end_time = time.time()
         # print(f"iter test: {batch['meta'['iter_test']]}")
@@ -88,7 +86,6 @@ def run_visualize():
     from lib.datasets import make_data_loader
     from lib.utils.net_utils import load_network
     from lib.visualizers import make_visualizer
-    from lib.networks.nerf.renderer import make_renderer
     from lib.utils.data_utils import to_cuda
 
 
@@ -100,13 +97,12 @@ def run_visualize():
     network.eval()
 
     data_loader = make_data_loader(cfg, is_train=False)
-    renderer = make_renderer(cfg, network)
     visualizer = make_visualizer(cfg, is_train=False)
-    # for batch in tqdm.tqdm(data_loader):
-    #     batch = to_cuda(batch)
-    #     with torch.no_grad():
-    #         output = renderer.render(batch)
-    #     visualizer.visualize(output, batch)
+    for batch in tqdm.tqdm(data_loader):
+        batch = to_cuda(batch)
+        with torch.no_grad():
+            output = network(batch)
+        visualizer.visualize(output, batch)
 
     if visualizer.write_video:
         visualizer.summarize()

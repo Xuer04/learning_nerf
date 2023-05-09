@@ -134,6 +134,7 @@ def parse_cfg(cfg, args):
     # assign the gpus
     if -1 not in cfg.gpus:
         os.environ['CUDA_VISIBLE_DEVICES'] = ', '.join([str(gpu) for gpu in cfg.gpus])
+        # print(f"gpu id: {os.environ['CUDA_VISIBLE_DEVICES']}")
 
     if 'bbox' in cfg:
         bbox = np.array(cfg.bbox).reshape((2, 3))

@@ -590,4 +590,3 @@ def get_near_far(bounds, ray_o, ray_d):
     near = near[mask_at_box] / norm_d[mask_at_box, 0]
     far = far[mask_at_box] / norm_d[mask_at_box, 0]
     return near, far, mask_at_box
-

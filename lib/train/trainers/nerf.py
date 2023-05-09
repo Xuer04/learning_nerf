@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from lib.networks.nerf.renderer import volume_renderer
-from lib.config import cfg
 
 
 class NetworkWrapper(nn.Module):
