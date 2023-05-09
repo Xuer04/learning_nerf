@@ -9,14 +9,12 @@ class Renderer:
         self.net = net
 
 
-    def render_rays(self, ray_batch, net_c=None, pytest=False):
+    def render_rays(self, ray_batch, ts, net_c=None, pytest=False):
         N_rays = ray_batch.shape[0]
-        rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
-        viewdirs = ray_batch[:, -3:] if ray_batch.shape[-1] > 8 else None
-        bounds = torch.reshape(ray_batch[..., [6, 8]], [-1, 1, 2])
-        # Fix some bug here, near and far with the shape of (N_rays, 2)
-        # bounds = torch.reshape(ray_batch[..., 6:8], [-1, 1, 2])
-        near, far = bounds[..., 0], bounds[..., 1]  # [-1,1]
+        rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # (N_rays, 3) each
+        viewdirs = rays_d
+        viewdirs = viewdirs / torch.norm(viewdirs, dim=-1, keepdim=True)
+        near, far = ray_batch[:, 6:7], ray_batch[:, 7:8]
 
         t_vals = torch.linspace(0., 1., steps=cfg.task_arg.N_samples).to(near)
         if not cfg.task_arg.lindisp:
@@ -44,11 +42,10 @@ class Renderer:
 
         pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[
             ..., :, None]  # [N_rays, N_samples, 3]
-
         if net_c is None:
-            raw = self.net(pts, viewdirs)
+            raw = self.net(pts, viewdirs, ts)
         else:
-            raw = self.net(pts, viewdirs, net_c)
+            raw = self.net(pts, viewdirs, ts, net_c)
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, cfg.task_arg.raw_noise_std, cfg.task_arg.white_bkgd)
 
         if cfg.task_arg.N_importance > 0:
@@ -66,11 +63,10 @@ class Renderer:
             pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[
                 ..., :, None]  # [N_rays, N_samples + N_importance, 3]
 
-            # raw = run_network(pts, fn=run_fn)
             if net_c is None:
-                raw = self.net(pts, viewdirs, model='fine')
+                raw = self.net(pts, viewdirs, ts, model='fine')
             else:
-                raw = self.net(pts, viewdirs, net_c, model='fine')
+                raw = self.net(pts, viewdirs, ts, net_c, model='fine')
 
             rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, cfg.task_arg.raw_noise_std, cfg.task_arg.white_bkgd)
 
@@ -95,44 +91,27 @@ class Renderer:
         return ret
 
 
-    def batchify_rays(self, rays_flat, chunk=1024 * 32):
+    def batchify_rays(self, rays_flat, ts, chunk=1024 * 32):
         """Render rays in smaller minibatches to avoid OOM."""
         all_ret = {}
         for i in range(0, rays_flat.shape[0], chunk):
-            ret = self.render_rays(rays_flat[i:i + chunk])
+            ret = self.render_rays(rays_flat[i:i + chunk], ts[i:i + chunk])
             for k in ret:
                 if k not in all_ret:
                     all_ret[k] = []
                 all_ret[k].append(ret[k])
         all_ret = {k: torch.cat(all_ret[k], 0) for k in all_ret}
+
         return all_ret
 
 
     def render(self, batch):
         """Do batched inference on rays using chunk."""
         rays, ts = batch['rays'], batch['ts']
+        sh = rays.shape
         rays = rays.reshape(-1, 8)
-        ts = ts.reshape(-1)
-        sh = rays.shape[0]
-        chunk_size = cfg.task_arg.chunk_size
-        # results = defaultdict(list)
-        # for i in range(0, sh, chunk_size):
-        #     rendered_ray_chunks = \
-        #         render_rays(self.models,
-        #                     self.embeddings,
-        #                     rays[i:i+chunk_size],
-        #                     ts[i:i+chunk_size],
-        #                     cfg.task_arg.N_samples,
-        #                     cfg.task_arg.use_disp,
-        #                     cfg.task_arg.perturb,
-        #                     cfg.task_arg.raw_noise_std,
-        #                     cfg.task_arg.N_importance,
-        #                     chunk_size, # chunk size is effective in val mode
-        #                     cfg.task_arg.white_bkgd)
-
-        #     for k, v in rendered_ray_chunks.items():
-        #         results[k] += [v]
-
-        # for k, v in results.items():
-        #     results[k] = torch.cat(v, 0)
-        # return results
+        ts = ts.reshape(-1, 1)
+        ret = self.batchify_rays(rays, ts, cfg.task_arg.chunk_size)
+        ret = {k: v.view(*sh[:-1], -1) for k, v in ret.items()}
+        print(f"rgb map shape: {ret['rgb_map'].shape}")
+        return ret

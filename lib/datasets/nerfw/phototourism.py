@@ -17,7 +17,7 @@ from .colmap_utils import \
 class Dataset(data.Dataset):
     def __init__(self, **kwargs):
         """
-        val_num: number of val images (used for multigpu, validate same image for all gpus)
+        test_num: number of test images (used for multigpu, validate same image for all gpus)
         use_cache: during data preparation, use precomputed rays (useful to accelerate
                    data loading, especially for multigpu!)
         """
@@ -26,8 +26,8 @@ class Dataset(data.Dataset):
         self.data_root = os.path.join(data_root, scene)
         self.split = split
         self.batch_size = cfg.task_arg.N_rays
-        self.input_ratio, self.val_num, self.use_cache = kwargs['input_ratio'], cfg.task_arg.val_num, cfg.task_arg.use_cache
-        self.val_num = max(1, self.val_num) # at least 1
+        self.input_ratio, self.test_num, self.use_cache = kwargs['input_ratio'], cfg.task_arg.test_num, cfg.task_arg.use_cache
+        self.test_num = max(1, self.test_num) # at least 1
         self.white_bkgd = cfg.task_arg.white_bkgd
 
         self.read_meta()
@@ -130,73 +130,96 @@ class Dataset(data.Dataset):
         self.N_imgs_train = len(self.img_ids_train)
         self.N_imgs_test = len(self.img_ids_test)
 
-        if self.use_cache:
-            all_rays = np.load(os.path.join(self.data_root,
-                                            f'cache/rays2.npy'))
-            self.all_rays = torch.from_numpy(all_rays)
-            all_rgbs = np.load(os.path.join(self.data_root,
-                                            f'cache/rgbs2.npy'))
-            self.all_rgbs = torch.from_numpy(all_rgbs)
+        if self.split == 'train':
+            if self.use_cache:
+                all_rays = np.load(os.path.join(self.data_root,
+                                                f'cache/rays2.npy'))
+                self.all_rays = torch.from_numpy(all_rays)
+                all_rgbs = np.load(os.path.join(self.data_root,
+                                                f'cache/rgbs2.npy'))
+                self.all_rgbs = torch.from_numpy(all_rgbs)
+            else:
+                self.all_rays = []
+                self.all_rgbs = []
+                for id_ in self.img_ids_train:
+                    c2w = torch.from_numpy(self.poses_dict[id_]).to(torch.float32)
+                    img_path = os.path.join(self.data_root, 'dense/images', self.image_paths[id_])
+                    img = imageio.imread(img_path)
+                    W, H = img.shape[:2]
+                    if self.input_ratio < 1:
+                        H = int(H * self.input_ratio)
+                        W = int(W * self.input_ratio)
+                        img = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
+                    img = (np.array(img) / 255.).astype(np.float32)
+                    img = torch.from_numpy(img) # (h, w, 3)
+                    img = img.reshape(-1, 3) # (h*w, 3)
+                    self.all_rgbs += [img]
+
+                    directions = get_ray_directions(H, W, self.Ks[id_])
+                    ray_o, ray_d = get_rays(directions, c2w)
+                    ray_at = id_ * torch.ones(len(ray_o), 1)
+
+                    self.all_rays += [torch.cat([ray_o, ray_d,
+                                                self.nears[id_]*torch.ones_like(ray_o[:, :1]),
+                                                self.fars[id_]*torch.ones_like(ray_o[:, :1]),
+                                                ray_at],
+                                                1)] # (h*w, 9)
+
+                self.all_rays = torch.cat(self.all_rays, 0) # ((num_imgs-1) * h * w, 9)
+                self.all_rgbs = torch.cat(self.all_rgbs, 0) # ((num_imgs-1) * h * w, 3)
+
+        elif self.split in ['val', 'test']:
+            self.test_id = self.img_ids_train[0] # use the first image to test
+
         else:
-            self.all_rays = []
-            self.all_rgbs = []
-            for id_ in self.img_ids_train:
-                c2w = torch.from_numpy(self.poses_dict[id_]).to(torch.float32)
-                img_path = os.path.join(self.data_root, 'dense/images', self.image_paths[id_])
-                img = imageio.imread(img_path)
-                W, H = img.shape[:2]
-                if self.input_ratio < 1:
-                    H = int(H * self.input_ratio)
-                    W = int(W * self.input_ratio)
-                    img = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
-                img = (np.array(img) / 255.).astype(np.float32)
-                self.all_rgbs += [img]
-
-                directions = get_ray_directions(H, W, self.Ks[id_])
-                ray_o, ray_d = get_rays(directions, c2w)
-                ray_at = id_ * torch.ones(len(ray_o), 1)
-
-                self.all_rays += [torch.cat([ray_o, ray_d,
-                                            self.nears[id_]*torch.ones_like(ray_o[:, :1]),
-                                            self.fars[id_]*torch.ones_like(ray_o[:, :1]),
-                                            ray_at],
-                                            1)] # (h*w, 9)
-
-            # self.all_rays = torch.cat(self.all_rays, 0) # ((num_imgs-1) * H * W, 9)
-            # self.all_rgbs = torch.cat(self.all_rgbs, 0) # ((num_imgs-1) * H * W, 3)
-
-        if self.split in ['val', 'test_train']:
-            self.val_id = self.img_ids_train[0] # use the first image to val
-
+            pass
 
     def __getitem__(self, index):
         ret = {}
-        rays = self.all_rays[index][:, :8] # (h*w, 8)
-        ts = self.all_rays[index][:, 8].long().reshape(-1, 1) # (h*w, 1)
-        rgbs = self.all_rgbs[index]
-        H, W = rgbs.shape[:2]
-        rgbs = torch.from_numpy(rgbs).reshape(-1, 3) # (h*w, 3)
 
         if self.split == 'train':
-            select_idx = np.random.choice(rays.shape[0], self.batch_size, replace=False)
-            rays = rays[select_idx] # (N_rays, 8)
-            ts = ts[select_idx] # (N_rays, 1)
-            rgbs = rgbs[select_idx] # (N_rays, 3)
+            rays = self.all_rays[index, :8]
+            ts = self.all_rays[index, 8].long()
+            rgbs = self.all_rgbs[index]
 
-        elif self.split in ['test']:
-            if self.split == 'val':
-                id_ = self.val_id
+        elif self.split in ['test', 'val']:
+            if self.split == 'test':
+                id_ = self.test_id
             else:
                 id_ = self.img_ids_train[index]
 
+            ret['c2w'] = c2w = torch.from_numpy(self.poses_dict[id_]).to(torch.float32)
+            img_path = os.path.join(self.data_root, 'dense/images', self.image_paths[id_])
+            img = imageio.imread(img_path)
+            W, H = img.shape[:2]
+            if self.input_ratio < 1:
+                H = int(H * self.input_ratio)
+                W = int(W * self.input_ratio)
+                img = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
+            img = (np.array(img) / 255.).astype(np.float32)
+            img = torch.from_numpy(img).reshape(-1, 3)
+
+            directions = get_ray_directions(H, W, self.Ks[id_])
+            ray_o, ray_d = get_rays(directions, c2w)
+
+            rays = torch.cat([ray_o, ray_d,
+                                    self.nears[id_]*torch.ones_like(ray_o[:, :1]),
+                                    self.fars[id_]*torch.ones_like(ray_o[:, :1]),],
+                                    1) # (h*w, 8)
+            ts = id_ * torch.ones(len(rays), dtype=torch.long) # (h*w, )
+            rgbs = img # (h*w, 3)
             ret.update({'meta':
                 {
                     'H': H,
                     'W': W,
                     'N_rays': self.batch_size,
+                    'id': id_
                 }
             })
-        ret = {'rays': rays, 'ts': ts, 'rgbs': rgbs}
+
+        ret['rays'] = rays
+        ret['ts'] = ts
+        ret['rgbs'] = rgbs
 
         return ret
 
@@ -204,8 +227,7 @@ class Dataset(data.Dataset):
         if self.split == 'train':
             return len(self.all_rays)
         if self.split == 'test':
-            return self.val_num
+            return self.test_num
         if self.split == 'val':
             return self.N_imgs_train
         return len(self.poses_test)
-        # return self.num_imgs_train

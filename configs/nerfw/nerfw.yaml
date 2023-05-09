@@ -32,14 +32,14 @@ task_arg:
   N_importance: 128 # number of samples per ray in fine network
   no_batching: True # True for synthetic datasets
   use_viewdirs: True # whether use full 5D input instead of 3D
-  use_disp: False
+  lindisp: False # whether use disp
   perturb: 1
   raw_noise_std: 0
   use_pe: True # whether use positional encoding
   test_skip: 1 # will load 1/N images from test/val sets, useful for large datasets
   precrop_iters: 500
   precrop_frac: 0.5
-  val_num: 1 # number of images in val
+  test_num: 1 # number of images for test
   use_cache: False
 
 network:

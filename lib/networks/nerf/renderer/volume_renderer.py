@@ -115,6 +115,7 @@ class Renderer:
         far = 6.
 
         sh = rays_o.shape
+        print(f"input shape: {sh}")
         rays_o, rays_d = rays_o.view(-1, 3), rays_d.view(-1, 3)
         near, far = near * torch.ones_like(rays_d[..., :-1]), far * torch.ones_like(rays_d[..., :-1])
         viewdirs = rays_d
