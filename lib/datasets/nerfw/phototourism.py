@@ -169,7 +169,7 @@ class Dataset(data.Dataset):
                 self.all_rgbs = torch.cat(self.all_rgbs, 0) # ((num_imgs-1) * h * w, 3)
 
         elif self.split in ['val', 'test']:
-            self.test_id = self.img_ids_train[0] # use the first image to test
+            self.test_id = self.img_ids_train[2] # use only one image to test
 
         else:
             pass

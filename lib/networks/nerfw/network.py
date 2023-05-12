@@ -48,8 +48,10 @@ class NeRF(nn.Module):
 
 
         # static output layers
-        self.static_sigma = nn.Sequential(nn.Linear(W, 1), nn.Softplus())
-        self.static_rgb = nn.Sequential(nn.Linear(W//2, 3), nn.Sigmoid())
+        # self.static_sigma = nn.Sequential(nn.Linear(W, 1), nn.Softplus())
+        # self.static_rgb = nn.Sequential(nn.Linear(W//2, 3), nn.Sigmoid())
+        self.static_sigma = nn.Linear(self.W, 1)
+        self.static_rgb = nn.Linear(self.W // 2, 3)
 
         if self.encode_transient:
             # transient encoding layers

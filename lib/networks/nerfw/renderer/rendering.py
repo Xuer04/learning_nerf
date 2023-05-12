@@ -41,7 +41,8 @@ class Renderer:
             z_vals = lower + (upper - lower) * t_rand
 
         pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[
-            ..., :, None]  # [N_rays, N_samples, 3]
+            ..., :, None]  # (N_rays, N_samples, 3)
+
         if net_c is None:
             raw = self.net(pts, viewdirs, ts)
         else:
@@ -60,8 +61,9 @@ class Renderer:
             z_samples = z_samples.detach()
 
             z_vals, _ = torch.sort(torch.cat([z_vals, z_samples], -1), -1)
+
             pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[
-                ..., :, None]  # [N_rays, N_samples + N_importance, 3]
+                ..., :, None]  # (N_rays, N_samples + N_importance, 3)
 
             if net_c is None:
                 raw = self.net(pts, viewdirs, ts, model='fine')

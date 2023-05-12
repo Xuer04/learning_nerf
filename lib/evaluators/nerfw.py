@@ -35,43 +35,6 @@ class Evaluator:
         dssim_ = dssim(image_pred, image_gt, 3, reduction) # dissimilarity in [0, 1]
         return 1-2*dssim_ # in [-1, 1]
 
-    # def evaluate(self, results, batch):
-    #     ret = {}
-    #     rgbs = batch['rgbs']
-    #     rgbs = rgbs.squeeze() # (H*W, 3)
-
-    #     ret['c_l'] = 0.5 * ((results['rgb_coarse']-rgbs)**2).mean()
-    #     if 'rgb_fine' in results:
-    #         if 'beta' not in results: # no transient head, normal MSE loss
-    #             ret['f_l'] = 0.5 * ((results['rgb_fine']-rgbs)**2).mean()
-    #         else:
-    #             ret['f_l'] = \
-    #                 ((results['rgb_fine']-rgbs)**2/(2*results['beta'].unsqueeze(1)**2)).mean()
-
-    #     # sum the loss
-    #     for k, v in ret.items():
-    #         ret[k] = self.coef * v
-
-    #     mse = sum(l for l in ret.values())
-    #     self.mses.append(mse)
-
-    #     typ = 'fine' if 'rgb_fine' in results else 'coarse'
-    #     psnr = self.psnr_metric(results[f'rgb_{typ}'], rgbs)
-    #     self.psnrs.append(psnr)
-
-    # def summarize(self):
-    #     ret = {}
-    #     ret.update({'mse': np.mean(self.mses)})
-    #     ret.update({'psnr': np.mean(self.psnrs)})
-    #     ret = {item: float(ret[item]) for item in ret}
-    #     print(ret)
-    #     self.mses = []
-    #     self.psnrs = []
-    #     # self.ssim = []
-    #     print('Save visualization results to {}'.format(cfg.result_dir))
-    #     json.dump(ret, open(os.path.join(cfg.result_dir, 'metrics.json'), 'w'))
-    #     return ret
-
     def evaluate(self, output, batch):
         rgb_pred = output['rgb_map'][0].detach().cpu().numpy()
         rgb_gt = batch['rgbs'][0].detach().cpu().numpy()
@@ -96,6 +59,7 @@ class Evaluator:
             '{}/view{:03d}_gt.png'.format(result_dir, id),
             (img_gt[..., [2, 1, 0]] * 255)
         )
+        print('Save image results to {}'.format(cfg.result_dir))
 
     def summarize(self):
         ret = {}
@@ -107,6 +71,6 @@ class Evaluator:
         self.mse = []
         self.psnr = []
         # self.ssim = []
-        print('Save visualization results to {}'.format(cfg.result_dir))
+        print('Save metric results to {}'.format(cfg.result_dir))
         json.dump(ret, open(os.path.join(cfg.result_dir, 'metrics.json'), 'w'))
         return ret

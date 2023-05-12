@@ -44,34 +44,3 @@ class NetworkWrapper(nn.Module):
         image_stats = {}
 
         return ret, loss, scalar_stats, image_stats
-        # scalar_stats = {}
-        # loss = 0
-
-        # targets = batch['rgbs']
-        # results = self.net(batch)
-        # ret = {}
-        # ret['c_l'] = 0.5 * ((results['rgb_coarse']-targets)**2).mean()
-        # if 'rgb_fine' in results:
-        #     if 'beta' not in results: # no transient head, normal MSE loss
-        #         ret['f_l'] = 0.5 * ((results['rgb_fine']-targets)**2).mean()
-        #     else:
-        #         ret['f_l'] = \
-        #             ((results['rgb_fine']-targets)**2/(2*results['beta'].unsqueeze(1)**2)).mean()
-        #         ret['b_l'] = 3 + torch.log(results['beta']).mean() # +3 to make it positive
-        #         ret['s_l'] = self.lambda_u * results['transient_sigmas'].mean()
-
-        # # sum the loss
-        # for k, v in ret.items():
-        #     ret[k] = self.coef * v
-
-        # scalar_stats.update({'img_loss0': ret['c_l']})
-        # scalar_stats.update({'img_loss': ret['f_l']})
-        # scalar_stats.update({'beta_loss': ret['b_l']})
-        # scalar_stats.update({'sigma_loss': ret['s_l']})
-
-        # loss = sum(l for l in ret.values())
-        # scalar_stats.update({'all_loss': loss})
-
-        # image_stats = {}
-
-        # return results, loss, scalar_stats, image_stats
