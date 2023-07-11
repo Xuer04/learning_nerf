@@ -18,7 +18,7 @@ def run_network():
     import time
     from lib.networks import make_network
     from lib.datasets import make_data_loader
-    from lib.networks.nerfw.renderer import make_renderer
+    from lib.networks.nerf.renderer import make_renderer
     from lib.utils.net_utils import load_network
     from lib.utils.data_utils import to_cuda
 
@@ -47,7 +47,7 @@ def run_evaluate():
     from lib.datasets import make_data_loader
     from lib.evaluators import make_evaluator
     from lib.networks import make_network
-    from lib.networks.nerfw.renderer import make_renderer
+    from lib.networks.nerf.renderer import make_renderer
     from lib.utils.net_utils import load_network
 
     network = make_network(cfg).cuda()
@@ -89,7 +89,7 @@ def run_visualize():
     from lib.datasets import make_data_loader
     from lib.utils.net_utils import load_network
     from lib.visualizers import make_visualizer
-    from lib.networks.nerfw.renderer import make_renderer
+    from lib.networks.nerf.renderer import make_renderer
     from lib.utils.data_utils import to_cuda
 
 

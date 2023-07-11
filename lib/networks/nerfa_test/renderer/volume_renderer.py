@@ -9,7 +9,7 @@ class Renderer:
         self.net = net
 
 
-    def render_rays(self, ray_batch, net_c=None, pytest=False):
+    def render_rays(self, ray_batch, ts, net_c=None, pytest=False):
         N_rays = ray_batch.shape[0]
         rays_o, rays_d = ray_batch[:, 0:3], ray_batch[:, 3:6]  # [N_rays, 3] each
         viewdirs = ray_batch[:, -3:] if ray_batch.shape[-1] > 8 else None
@@ -46,9 +46,9 @@ class Renderer:
             ..., :, None]  # [N_rays, N_samples, 3]
 
         if net_c is None:
-            raw = self.net(pts, viewdirs)
+            raw = self.net(pts, viewdirs, ts)
         else:
-            raw = self.net(pts, viewdirs, net_c)
+            raw = self.net(pts, viewdirs, ts, net_c)
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, cfg.task_arg.raw_noise_std, cfg.task_arg.white_bkgd)
 
         if cfg.task_arg.N_importance > 0:
@@ -68,9 +68,9 @@ class Renderer:
 
             # raw = run_network(pts, fn=run_fn)
             if net_c is None:
-                raw = self.net(pts, viewdirs, model='fine')
+                raw = self.net(pts, viewdirs, ts, model='fine')
             else:
-                raw = self.net(pts, viewdirs, net_c, model='fine')
+                raw = self.net(pts, viewdirs, ts, net_c, model='fine')
 
             rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, cfg.task_arg.raw_noise_std, cfg.task_arg.white_bkgd)
 
@@ -95,11 +95,11 @@ class Renderer:
         return ret
 
 
-    def batchify_rays(self, rays_flat, chunk=1024 * 32):
+    def batchify_rays(self, rays_flat, ts, chunk=1024 * 32):
         """Render rays in smaller minibatches to avoid OOM."""
         all_ret = {}
         for i in range(0, rays_flat.shape[0], chunk):
-            ret = self.render_rays(rays_flat[i:i + chunk])
+            ret = self.render_rays(rays_flat[i:i + chunk], ts[i:i + chunk])
             for k in ret:
                 if k not in all_ret:
                     all_ret[k] = []
@@ -113,15 +113,20 @@ class Renderer:
         rays_d = batch['ray_d']
         near = batch['near']
         far = batch['far']
+        ts = batch['ts']
 
         sh = rays_o.shape
         # print(f"input shape: {sh}")
         rays_o, rays_d = rays_o.view(-1, 3), rays_d.view(-1, 3)
         near, far = near * torch.ones_like(rays_d[..., :-1]), far * torch.ones_like(rays_d[..., :-1])
+        ts = ts * torch.ones_like(rays_d)
+        ts = ts.long()
+
         viewdirs = rays_d
         viewdirs = viewdirs / torch.norm(viewdirs, dim=-1, keepdim=True)
+
         rays = torch.cat([rays_o, rays_d, near, far, viewdirs], dim=-1)
-        ret = self.batchify_rays(rays, cfg.task_arg.chunk_size)
+        ret = self.batchify_rays(rays, ts, cfg.task_arg.chunk_size)
         ret = {k: v.view(*sh[:-1], -1) for k, v in ret.items()}
         ret['depth_map'] = ret['depth_map'].view(*sh[:-1])
         return ret

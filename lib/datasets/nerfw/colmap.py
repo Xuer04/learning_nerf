@@ -8,6 +8,8 @@ import numpy as np
 import os
 import pandas as pd
 from tqdm import tqdm
+import open3d as o3d
+from kornia import create_meshgrid
 
 from .ray_utils import *
 from .colmap_utils import read_cameras_binary, read_images_binary, read_points3d_binary
@@ -31,13 +33,73 @@ class Dataset(data.Dataset):
         self.transform = T.ToTensor()
         self.read_meta()
 
+    def get_colmap_depth(
+        self,
+        img_p3d_all,
+        img_2d_all,
+        img_err_all,
+        pose,
+        intrinsic,
+        img_w,
+        img_h,
+        device=0,
+    ):
+        # return depth and weights for each image
+        # calculate normalize factor
+        grid = create_meshgrid(
+            img_h, img_w, normalized_coordinates=False, device=device
+        )[0]
+        i, j = grid.unbind(-1)
+        fx, fy, cx, cy = (
+            intrinsic[0, 0],
+            intrinsic[1, 1],
+            intrinsic[0, 2],
+            intrinsic[1, 2],
+        )
+        directions = torch.stack(
+            [(i - cx) / fx, (j - cy) / fy, torch.ones_like(i)], dim=-1
+        )  # (H, W, 3)
+
+        # Rotate ray directions from camera coordinate to the world coordinate
+        rays_d = directions @ pose[:, :3].T  # (H, W, 3)
+        dir_norm = torch.norm(rays_d, dim=-1, keepdim=True).reshape(img_h, img_w)
+
+        # depth from sfm key points
+        depth_all = torch.zeros(img_h, img_w, device=device)
+        weights_all = torch.zeros(img_h, img_w, device=device)
+
+        img_2d_all = torch.round(img_2d_all).long()  # (width, height)
+        valid_mask = (
+            (img_2d_all[:, 0] >= 0)
+            & (img_2d_all[:, 0] < img_w)
+            & (img_2d_all[:, 1] >= 0)
+            & (img_2d_all[:, 1] < img_h)
+        )
+
+        img_2d = img_2d_all[valid_mask]
+        img_err = img_err_all[valid_mask].squeeze()
+
+        img_p3d = img_p3d_all[valid_mask]
+        pose = torch.cat((pose, torch.zeros(1, 4, device=device)), dim=0)
+        pose[3, 3] = 1
+        extrinsic = torch.linalg.inv(pose)
+
+        Err_mean = torch.mean(img_err)
+        projected = intrinsic @ extrinsic[:3] @ img_p3d.T
+
+        depth = projected[2, :]
+        weight = 2 * torch.exp(-((img_err / Err_mean) ** 2))
+
+        depth_all[img_2d[:, 1], img_2d[:, 0]] = depth
+        weights_all[img_2d[:, 1], img_2d[:, 0]] = weight
+        return depth_all.cpu() * dir_norm.cpu(), weights_all.cpu()
+
     def read_meta(self):
         # read all files in the tsv first (split to train and test later)
         tsv = glob.glob(os.path.join(self.data_root, '*.tsv'))[0]
         self.files = pd.read_csv(tsv, sep='\t')
         self.files = self.files[~self.files['id'].isnull()] # remove data without id
         self.files.reset_index(inplace=True, drop=True)
-        print(f"self.")
 
         # read the id from images.bin using image file name!
         if self.use_cache:
@@ -171,7 +233,6 @@ class Dataset(data.Dataset):
         if self.split in ["train", "eval"]:
             self.all_rays = []
             self.all_rgbs = []
-            self.coords = []
             if self.use_cache:
                 print(f"Loading cached rays..")
                 all_rays = np.load(os.path.join(
@@ -234,13 +295,6 @@ class Dataset(data.Dataset):
                         self.eval_images += [self.image_paths[id_]]
                         self.extrinsics += [c2w]
                         self.intrinsics += [self.Ks[id_]]
-                    coord = torch.stack(
-                        torch.meshgrid(
-                            torch.linspace(0, img_h - 1, img_h),
-                            torch.linspace(0, img_w - 1, img_w), indexing='ij'
-                        ), -1
-                    )
-                    self.coords += [coord]
                     img = self.transform(img)  # (3, h, w)
                     img = img.view(3, -1).permute(1, 0)  # (h*w, 3) RGB
                     self.all_rgbs += [img]
@@ -248,6 +302,37 @@ class Dataset(data.Dataset):
                     directions = get_ray_directions(img_h, img_w, self.Ks[id_])
                     rays_o, rays_d = get_rays(directions, c2w)
                     rays_at = id_ * torch.ones(len(rays_o), 1)
+
+                    # fix pose
+                    img_colmap = imgdata[id_]
+                    pose = torch.FloatTensor(self.poses_dict[id_]).cuda()
+                    pose[..., 1:3] *= -1
+                    intrinsic = torch.FloatTensor(self.Ks[id_]).cuda()
+
+                    valid_3d_mask = img_colmap.point3D_ids != -1
+                    point3d_ids = img_colmap.point3D_ids[valid_3d_mask]
+                    img_p3d = pts3d_array[point3d_ids].cuda()
+                    img_err = error_array[point3d_ids].cuda()
+                    img_2d = torch.from_numpy(img_colmap.xys)[valid_3d_mask] * self.input_ratio
+                    depth_sfm, weight = self.get_colmap_depth(
+                        img_p3d, img_2d, img_err, pose, intrinsic, img_w, img_h
+                    )
+                    depths = depth_sfm.reshape(-1, 1)
+                    weights = weight.reshape(-1, 1)
+
+                    image_name = self.image_paths[id_].split(".")[0]
+
+                    if self.vis_depth:
+                        print(f"saving... at results/depth/{image_name}.ply")
+                        model_dir = os.path.join(cfg.result_dir, 'depth')
+                        os.system('mkdir -p {}'.format(model_dir))
+                        model_path = os.path.join(model_dir, f"{image_name}.ply")
+                        pts = rays_o + rays_d * depths
+                        gt_pcd = o3d.geometry.PointCloud()
+                        gt_pcd.points = o3d.utility.Vector3dVector(pts.numpy())
+                        o3d.io.write_point_cloud(
+                            model_path, gt_pcd
+                        )
 
                     self.all_rays += [torch.cat([
                         rays_o,

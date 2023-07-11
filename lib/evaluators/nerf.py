@@ -39,12 +39,12 @@ class Evaluator:
             (img_gt[..., [2, 1, 0]] * 255)
         )
         img_pred = (img_pred * 255).astype(np.uint8)
-        self.imgs.append(img_pred)
+        # self.imgs.append(img_pred)
 
-        if len(self.imgs) == num_imgs:
-            video_result_file = os.path.join(cfg.result_dir, 'videos', 'video.mp4')
-            print(f"Write images to video file {video_result_file}")
-            imageio.mimwrite(video_result_file, self.imgs, fps=30, quality=10)
+        # if len(self.imgs) == num_imgs:
+        #     video_result_file = os.path.join(cfg.result_dir, 'videos', 'video.mp4')
+        #     print(f"Write images to video file {video_result_file}")
+        #     imageio.mimwrite(video_result_file, self.imgs, fps=30, quality=10)
 
         # compute the ssim
         # ssim = compare_ssim(img_pred, img_gt, win_size=101, full=True)

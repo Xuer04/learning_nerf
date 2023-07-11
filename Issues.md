@@ -94,6 +94,45 @@ tensor([2, 3, 4], device='cuda:0')
 
 推荐以后都使用`torch.tensor`的方式来创建张量
 
+#### 问题 2: Fixed
+
+在从 DataLoader 中读取 batch 的时候出现了这个错误
+
+报错信息:
+
+```py
+AttributeError: 'str' object has no attribute 'to'
+```
+
+原因分析:
+
+这里主要是用了 `to_cuda()` 这个函数导致的报错
+
+`to_cuda()`函数的内容如下:
+
+```py
+def to_cuda(batch, device=torch.device('cuda:0')):
+    if isinstance(batch, tuple) or isinstance(batch, list):
+        #batch[k] = [b.cuda() for b in batch[k]]
+        #batch[k] = [b.to(self.device) for b in batch[k]]
+        batch = [to_cuda(b, device) for b in batch]
+    elif isinstance(batch, dict):
+        #batch[k] = {key: self.to_cuda(batch[k][key]) for key in batch[k]}
+        batch_ = {}
+        for key in batch:
+            if key == 'meta':
+                batch_[key] = batch[key]
+            else:
+                batch_[key] = to_cuda(batch[key], device)
+        batch = batch_
+    else:
+        # batch[k] = batch[k].cuda()
+        batch = batch.to(device)
+    return batch
+```
+
+所以问题出现的原因是 `batch`中有变量的类型是 `string`
+
 ### NumPy 相关
 
 #### 问题 1: Fixed

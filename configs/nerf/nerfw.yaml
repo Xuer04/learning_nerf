@@ -1,28 +1,28 @@
-task: nerf-w
+task: nerf
 gpus: [2] # set gpu device number
-exp_name: "nerfw"
+exp_name: "nerf"
 scene: "brandenburg_gate"
 
-train_dataset_module: 'lib.datasets.nerfw.phototourism'
-train_dataset_path: 'lib/datasets/nerfw/phototourism.py'
+train_dataset_module: 'lib.datasets.nerf.nerfw'
+train_dataset_path: 'lib/datasets/nerf/nerfw.py'
 
-test_dataset_module: 'lib.datasets.nerfw.phototourism'
-test_dataset_path: 'lib/datasets/nerfw/phototourism.py'
+test_dataset_module: 'lib.datasets.nerf.nerfw'
+test_dataset_path: 'lib/datasets/nerf/nerfw.py'
 
-network_module: 'lib.networks.nerfw.network'
-network_path: 'lib/networks/nerfw/network.py'
+network_module: 'lib.networks.nerf.network'
+network_path: 'lib/networks/nerf/network.py'
 
-renderer_module: 'lib.networks.nerfw.renderer.rendering'
-renderer_path: 'lib/networks/nerfw/renderer/rendering.py'
+renderer_module: 'lib.networks.nerf.renderer.volume_renderer'
+renderer_path: 'lib/networks/nerf/renderer/volume_renderer.py'
 
-loss_module: 'lib.train.trainers.nerfw'
-loss_path: 'lib/train/trainers/nerfw.py'
+loss_module: 'lib.train.trainers.nerf'
+loss_path: 'lib/train/trainers/nerf.py'
 
 evaluator_module: 'lib.evaluators.nerfw'
 evaluator_path: 'lib/evaluators/nerfw.py'
 
-visualizer_module: 'lib.visualizers.nerfw'
-visualizer_path: 'lib/visualizers/nerfw.py'
+visualizer_module: 'lib.visualizers.nerf'
+visualizer_path: 'lib/visualizers/nerf.py'
 
 task_arg:
   N_rays: 1024 # number of rays in each batch
@@ -32,28 +32,22 @@ task_arg:
   N_importance: 128 # number of samples per ray in fine network
   no_batching: True # True for synthetic datasets
   use_viewdirs: True # whether use full 5D input instead of 3D
-  lindisp: False # whether use disp
+  lindisp: False
   perturb: 1
   raw_noise_std: 0
   use_pe: True # whether use positional encoding
   test_skip: 1 # will load 1/N images from test/val sets, useful for large datasets
   precrop_iters: 500
   precrop_frac: 0.5
-  test_num: 1 # number of images for test
+  test_num: 1
   use_cache: False
 
 network:
-  nerfw:
+  nerf:
     W: 256 # width of network
     D: 8 # depth of network
     V_D: 1 # appearance depth
     skips: [4]
-    N_vocab: 1500 # number of vocabulary (number of images) in the dataset for nn.Embedding
-    encode_a: True # whether use appearance embeddings
-    N_a: 48 # number of embeddings for appearance
-    encode_t: True # whether use transient embeddings
-    N_tau: 16 # number of embeddings for transient
-    beta_min: .1 # minimum color variance for each ray
   xyz_encoder: # encoder for location
     type: "frequency"
     input_dim: 3 # dimensions of input data
@@ -84,7 +78,7 @@ train:
   batch_size: 1
   lr: 5e-4 # learning rate
   weight_decay: 0.
-  epoch: 600
+  epoch: 200
   optim: 'adam'
   scheduler:
     type: "exponential"
@@ -99,7 +93,7 @@ eval:
   whole_img: True
 
 ep_iter: 500 # number of iterations in each epoch
-save_ep: 40
-eval_ep: 40 # 20000 iterations
+save_ep: 20
+eval_ep: 20 # 10000 iterations
 save_latest_ep: 10 # 5000 iterations
 log_interval: 10

@@ -40,13 +40,15 @@ class Renderer:
 
             z_vals = lower + (upper - lower) * t_rand
 
-        pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[
-            ..., :, None]  # (N_rays, N_samples, 3)
+        # TODO: change here
+        pts_ = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]  # (N_rays, N_samples, 3)
+        viewdirs_ = viewdirs
+        ts_ = ts
 
         if net_c is None:
-            raw = self.net(pts, viewdirs, ts)
+            raw = self.net(pts_, viewdirs_, ts_)
         else:
-            raw = self.net(pts, viewdirs, ts, net_c)
+            raw = self.net(pts_, viewdirs_, ts_, net_c)
         rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, cfg.task_arg.raw_noise_std, cfg.task_arg.white_bkgd)
 
         if cfg.task_arg.N_importance > 0:
@@ -62,13 +64,14 @@ class Renderer:
 
             z_vals, _ = torch.sort(torch.cat([z_vals, z_samples], -1), -1)
 
-            pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[
-                ..., :, None]  # (N_rays, N_samples + N_importance, 3)
+            pts_ = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]  # (N_rays, N_samples, 3)
+            viewdirs_ = viewdirs
+            ts_ = ts
 
             if net_c is None:
-                raw = self.net(pts, viewdirs, ts, model='fine')
+                raw = self.net(pts_, viewdirs_, ts_, model='fine')
             else:
-                raw = self.net(pts, viewdirs, ts, net_c, model='fine')
+                raw = self.net(pts_, viewdirs_, ts_, net_c, model='fine')
 
             rgb_map, disp_map, acc_map, weights, depth_map = raw2outputs(raw, z_vals, rays_d, cfg.task_arg.raw_noise_std, cfg.task_arg.white_bkgd)
 

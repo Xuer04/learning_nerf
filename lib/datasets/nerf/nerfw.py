@@ -1,16 +1,20 @@
-from lib.config import cfg
+import glob
+import os
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.utils.data as data
-from torchvision import transforms as T
 from PIL import Image
-import glob
-import numpy as np
-import os
-import pandas as pd
+from torchvision import transforms as T
 from tqdm import tqdm
 
+from lib.config import cfg
+
+from .colmap_utils import (read_cameras_binary, read_images_binary,
+                           read_points3d_binary)
 from .ray_utils import *
-from .colmap_utils import read_cameras_binary, read_images_binary, read_points3d_binary
+
 
 class Dataset(data.Dataset):
     def __init__(self, **kwargs):
@@ -37,7 +41,6 @@ class Dataset(data.Dataset):
         self.files = pd.read_csv(tsv, sep='\t')
         self.files = self.files[~self.files['id'].isnull()] # remove data without id
         self.files.reset_index(inplace=True, drop=True)
-        print(f"self.")
 
         # read the id from images.bin using image file name!
         if self.use_cache:
@@ -136,7 +139,7 @@ class Dataset(data.Dataset):
             )
 
             # compute near and far bounds for each image individually
-            self.nears, self.fars = {}, {}
+            self.nears, self.fars = {}, {} # {id_: distance}
             for i, id_ in enumerate(self.img_ids):
                 xyz_cam_i = (xyz_world_h @ w2c_mats[i].T)[:, :3] # xyz in the ith cam coordinate
                 xyz_cam_i = xyz_cam_i[xyz_cam_i[:, 2]>0] # filter out points that lie behind the cam
@@ -172,6 +175,10 @@ class Dataset(data.Dataset):
             self.all_rays = []
             self.all_rgbs = []
             self.coords = []
+            self.all_rayo = []
+            self.all_rayd = []
+            self.all_nears = []
+            self.all_fars = []
             if self.use_cache:
                 print(f"Loading cached rays..")
                 all_rays = np.load(os.path.join(
@@ -194,29 +201,16 @@ class Dataset(data.Dataset):
                     self.extrinsics = []
                     self.intrinsics = []
                     self.test_id = self.img_ids_train[0] # use only one image to test
+
+                # calculate the projection error
                 pts3d_array = torch.ones(max(pts3d.keys()) + 1, 4)
                 error_array = torch.ones(max(pts3d.keys()) + 1, 1)
-                for pts_id, pts in tqdm(pts3d.items()):
+                for pts_id, pts in tqdm(pts3d.items()): # all_points 100040
                     pts3d_array[pts_id, :3] = torch.from_numpy(pts.xyz)
                     error_array[pts_id, 0] = torch.from_numpy(pts.error)
                 print("Mean Projection Error:", torch.mean(error_array))
 
                 for id_ in tqdm(self.img_ids_train):
-                    # c2w = torch.from_numpy(self.poses_dict[id_]).to(torch.float32)
-                    # img_path = os.path.join(self.data_root, 'dense/images', self.image_paths[id_])
-                    # img = imageio.imread(img_path)
-                    # W, H = img.shape[:2]
-                    # if self.input_ratio < 1:
-                    #     H = int(H * self.input_ratio)
-                    #     W = int(W * self.input_ratio)
-                    #     img = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
-                    # img = (img / 255.).astype(np.float32)
-                    # self.all_rgbs += [img]
-
-                    # directions = get_ray_directions(H, W, self.Ks[id_])
-                    # ray_o, ray_d = get_rays(directions, c2w)
-                    # ray_at = id_ * torch.ones(len(ray_o), 1)
-
                     c2w = torch.FloatTensor(self.poses_dict[id_])
 
                     img = Image.open(
@@ -243,26 +237,32 @@ class Dataset(data.Dataset):
                     self.coords += [coord]
                     img = self.transform(img)  # (3, h, w)
                     img = img.view(3, -1).permute(1, 0)  # (h*w, 3) RGB
+                    img = img.reshape(img_h, img_w, 3)
                     self.all_rgbs += [img]
 
                     directions = get_ray_directions(img_h, img_w, self.Ks[id_])
                     rays_o, rays_d = get_rays(directions, c2w)
-                    rays_at = id_ * torch.ones(len(rays_o), 1)
+                    rays_at = id_
+                    near = self.nears[id_]
+                    far = self.fars[id_]
 
                     self.all_rays += [torch.cat([
                         rays_o,
                         rays_d,
-                        self.nears[id_]*torch.ones_like(rays_o[:, :1]),
-                        self.fars[id_]*torch.ones_like(rays_o[:, :1]),
-                        rays_at
                     ],1)] # (h*w, 9)
 
-                self.all_rays = torch.cat(self.all_rays, 0) # ((num_imgs-1) * h * w, 9)
-                self.all_rgbs = torch.cat(self.all_rgbs, 0) # ((num_imgs-1) * h * w, 3)
+                    self.all_rayo += [rays_o]
+                    self.all_rayd += [rays_d]
+                    self.all_nears += [near]
+                    self.all_fars += [far]
+
+                # self.all_rays = torch.cat(self.all_rays, 0) # ((num_imgs-1) * h * w, 9)
+                # self.all_rgbs = torch.cat(self.all_rgbs, 0) # ((num_imgs-1) * h * w, 3)
+                # print(f"len all_rays:{len(self.all_rays)}")
 
 
         elif self.split in ['val', 'test']:
-            self.test_id = self.img_ids_train[0] # use only one image to test
+            self.test_ids = self.img_ids_train[:50] # use only one image to test
 
         else:
             pass
@@ -271,19 +271,39 @@ class Dataset(data.Dataset):
         ret = {}
 
         if self.split == 'train':
-            # rays = self.all_rays[index][:, :8] # (h*w, 8)
-            # ts = self.all_rays[index][:, 8].long().reshape(-1, 1) # (h*w, 1)
-            # rgbs = self.all_rgbs[index]
-            # rgbs = torch.from_numpy(rgbs).reshape(-1, 3) # (h*w, 3)
-            # select_idx = np.random.choice(rays.shape[0], self.batch_size, replace=False)
-            # rays = rays[select_idx] # (N_rays, 8)
-            # ts = ts[select_idx] # (N_rays, 1)
-            # rgbs = rgbs[select_idx] # (N_rays, 3)
+            ray_os = self.all_rayo[index]
+            ray_ds = self.all_rayd[index]
+            rgbs = self.all_rgbs[index]
+
+            # coords = self.coords_center if self.num_iter_train < self.precrop_iters else self.coords
+            coords = self.coords[index]
+            coords = torch.reshape(coords, [-1, 2])
+            select_ids = np.random.choice(coords.shape[0], size=self.batch_size, replace=False)
+            select_coords = coords[select_ids].long()
+
+            ray_o = ray_os[select_coords[:, 0], select_coords[:, 1]]  # (N_rays, 3)
+            ray_d = ray_ds[select_coords[:, 0], select_coords[:, 1]]  # (N_rays, 3)
+            rgb = rgbs[select_coords[:, 0], select_coords[:, 1]]      # (N_rays, 3)
+
+            near = self.all_nears[index]
+            far = self.all_fars[index]
+
+            # print(f"ray_o shape:{ray_o.shape}")
+            # print(f"ray_d shape:{ray_d.shape}")
+            # print(f"rgb shape:{rgb.shape}")
+            # print(f"near shape:{near.shape}")
+            # print(f"far shape:{far.shape}")
+            # print(view)
 
             ret = {
-                'rays': self.all_rays[index, :8],
-                'ts': self.all_rays[index, 8].long(),
-                'rgbs': self.all_rgbs[index],
+                # 'rays': self.all_rays[index, :8],
+                # 'ts': self.all_rays[index, 8].long(),
+                # 'rgbs': self.all_rgbs[index],
+                'ray_o': ray_o,
+                'ray_d': ray_d,
+                'rgb': rgb,
+                'near': near,
+                'far': far,
             }
 
         elif self.split == 'val':
@@ -339,7 +359,7 @@ class Dataset(data.Dataset):
                 }
             })
         elif self.split == "test":
-            id_ = self.test_id
+            id_ = self.test_ids[index]
             ret["c2w"] = c2w = torch.FloatTensor(self.poses_dict[id_])
             img = Image.open(
                 os.path.join(
@@ -354,21 +374,27 @@ class Dataset(data.Dataset):
             w, h = img_w, img_h
             img = self.transform(img)  # (3, h, w)
             img = img.view(3, -1).permute(1, 0)  # (h*w, 3) RGB
-            ret["rgbs"] = img
+            ret["rgb"] = img
 
             image_name = self.image_paths[id_].split(".")[0]
             directions = get_ray_directions(img_h, img_w, self.Ks[id_])
-            rays_o, rays_d = get_rays(directions, c2w)
+            ray_o, ray_d = get_rays(directions, c2w)
+            ray_o = ray_o.reshape(-1, 3)
+            ray_d = ray_d.reshape(-1, 3)
+            near = self.nears[id_]
+            far = self.fars[id_]
             rays = torch.cat(
                 [
-                    rays_o,
-                    rays_d,
-                    self.nears[id_] * torch.ones_like(rays_o[:, :1]),
-                    self.fars[id_] * torch.ones_like(rays_o[:, :1]),
+                    ray_o,
+                    ray_d,
                 ],
                 1,
             )
             ret['rays'] = rays
+            ret['ray_o'] = ray_o
+            ret['ray_d'] = ray_d
+            ret['near'] = near
+            ret['far'] = far
             ret['ts'] = id_ * torch.ones(len(rays), dtype=torch.long)
             ret['K'] = self.Ks[id_]
             ret.update({
@@ -379,14 +405,20 @@ class Dataset(data.Dataset):
                     'W': w
                 }
             })
+            # print(f"ray_o shape:{ray_o.shape}")
+            # print(f"ray_d shape:{ray_d.shape}")
+            # print(f"rgb shape:{img.shape}")
+            # print(f"near shape:{near.shape}")
+            # print(f"far shape:{far.shape}")
+            # print(view)
 
         return ret
 
     def __len__(self):
         if self.split in ['train', 'eval']:
-            return len(self.all_rays)
+            return len(self.img_ids_train)
         if self.split == 'test':
-            return self.test_num
+            return len(self.test_ids)
         if self.split == 'val':
             return self.N_imgs_train
         return len(self.poses_test)

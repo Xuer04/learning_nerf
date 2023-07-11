@@ -1,13 +1,25 @@
 import torch
 import torch.nn as nn
 from lib.networks.encoding import get_encoder
+from collections import OrderedDict
 from lib.config import cfg
 from torch.nn import functional as F
-from .rendering import *
 
 
 class NeRF(nn.Module):
-    def __init__(self, typ, D=8, W=256, input_ch_xyz=3, input_ch_dir=3, input_ch_a=48, input_ch_tau=16, skips=[4], use_viewdirs=False, encode_a=True, encode_t=True, beta_min=0.1):
+    def __init__(self,
+                 typ,
+                 D=8,
+                 W=256,
+                 input_ch_xyz=3,
+                 input_ch_dir=3,
+                 input_ch_a=48,
+                 input_ch_tau=16,
+                 skips=[4],
+                 use_viewdirs=False,
+                 encode_a=True,
+                 encode_t=True,
+                 beta_min=0.1):
         """
         Args:
             D (int, optional): depth of network. Defaults to 8.
@@ -37,94 +49,58 @@ class NeRF(nn.Module):
         self.beta_min = beta_min
 
         # xyz encoding layers
-        self.xyz_linears = nn.ModuleList(
-        [nn.Linear(self.input_ch_xyz, self.W)] + [nn.Linear(self.W, self.W) if i not in self.skips else nn.Linear(self.W + self.input_ch_xyz, self.W) for i in
-                                        range(self.D - 1)])
-        self.xyz_encoding_head = nn.Linear(W, W)
+        self.pts_linears = nn.ModuleList(
+            [nn.Linear(self.input_ch_xyz, self.W)] +
+            [nn.Linear(self.W, self.W) if i not in self.skips else nn.Linear(self.W + self.input_ch_xyz, self.W) for i in range(D - 1)]
+        )
 
-        # dir encoding layers
-        self.dir_encoding = nn.Sequential(
-                        nn.Linear(W+input_ch_dir+self.input_ch_a, W//2), nn.ReLU(True))
+        if self.encode_appearance:
+            apperence_encoding = OrderedDict([
+                ('static_linear_0', nn.Linear(self.W + self.input_ch_dir + self.input_ch_a, self.W // 2)),
+                ('static_relu_0', nn.ReLU(True))
+            ])
+            for s_layer_i in range(1, self.D // 2):
+                apperence_encoding[f'static_linear_{s_layer_i}'] = nn.Linear(self.W // 2, self.W // 2)
+                apperence_encoding[f'static_relu_{s_layer_i}'] = nn.ReLU(True)
+            self.apperence_encoding = nn.Sequential(apperence_encoding)
 
+        # view encoding layers
+        self.views_linears = nn.ModuleList([nn.Linear(self.input_ch_dir+ self.W, self.W // 2)])
 
-        # static output layers
-        # self.static_sigma = nn.Sequential(nn.Linear(W, 1), nn.Softplus())
-        # self.static_rgb = nn.Sequential(nn.Linear(W//2, 3), nn.Sigmoid())
-        self.static_sigma = nn.Linear(self.W, 1)
-        self.static_rgb = nn.Linear(self.W // 2, 3)
-
-        if self.encode_transient:
-            # transient encoding layers
-            self.transient_encoding = nn.Sequential(
-                                        nn.Linear(W+self.input_ch_t, W//2), nn.ReLU(True),
-                                        nn.Linear(W//2, W//2), nn.ReLU(True),
-                                        nn.Linear(W//2, W//2), nn.ReLU(True),
-                                        nn.Linear(W//2, W//2), nn.ReLU(True))
-            # transient output layers
-            self.transient_sigma = nn.Sequential(nn.Linear(W//2, 1), nn.Softplus())
-            self.transient_rgb = nn.Sequential(nn.Linear(W//2, 3), nn.Sigmoid())
-            self.transient_beta = nn.Sequential(nn.Linear(W//2, 1), nn.Softplus())
-
-
-    def forward(self, x, output_sigma_only=False, output_transient=False):
-        """
-        Encodes input (xyz+dir) to rgb+sigma (not ready to render yet).
-
-        Inputs:
-            `x`: the embedded vector of position (+ direction + appearance + transient)
-            `sigma_only`: whether to infer sigma only.
-            `output_transient`: whether to infer the transient component.
-
-        Outputs (concatenated):
-            if sigma_ony:
-                static_sigma
-            elif output_transient:
-                static_rgb, static_sigma, transient_rgb, transient_sigma, transient_beta
-            else:
-                static_rgb, static_sigma
-        """
-        if output_sigma_only:
-            input_xyz = x
-        elif output_transient:
-            input_xyz, input_dir_a, input_t = \
-                torch.split(x, [self.input_ch_xyz,
-                                self.input_ch_dir+self.input_ch_a,
-                                self.input_ch_t], dim=-1)
+        if use_viewdirs:
+            self.feature_linear = nn.Linear(self.W, self.W)
+            self.alpha_linear = nn.Linear(W, 1)
+            self.rgb_linear = nn.Linear(W//2, 3)
         else:
-            input_xyz, input_dir_a = \
-                torch.split(x, [self.input_ch_xyz,
-                                self.input_ch_dir+self.input_ch_a], dim=-1)
+            self.output_linear = nn.Linear(self.W, self.output_ch)
 
-        xyz_ = input_xyz
-        for i, l in enumerate(self.xyz_linears):
-            xyz_ = self.xyz_linears[i](xyz_)
-            xyz_ = F.relu(xyz_)
+
+    def forward(self, x):
+        input_pts, input_views, embedding_a = torch.split(x, [self.input_ch_xyz, self.input_ch_dir, self.input_ch_a], dim=-1)
+        h = input_pts
+        for i, l in enumerate(self.pts_linears):
+            h = self.pts_linears[i](h)
+            h = F.relu(h)
             if i in self.skips:
-                xyz_ = torch.cat([input_xyz, xyz_], -1)
+                h = torch.cat([input_pts, h], -1)
 
-        static_sigma = self.static_sigma(xyz_)
-        if output_sigma_only:
-            return static_sigma # (B, 1)
+        if self.use_viewdirs:
+            alpha = self.alpha_linear(h)
+            feature = self.feature_linear(h)
+            if self.encode_appearance:
+                apperence_encoding_input = torch.cat([feature, input_views, embedding_a], -1)
+                h = self.apperence_encoding(apperence_encoding_input)
+            else:
+                h = torch.cat([feature, input_views], -1)
+                for i, l in enumerate(self.views_linears):
+                    h = self.views_linears[i](h)
+                    h = F.relu(h)
 
-        xyz_encoding = self.xyz_encoding_head(xyz_)
-        dir_encoding_input = torch.cat([xyz_encoding, input_dir_a], -1)
-        dir_encoding = self.dir_encoding(dir_encoding_input)
-        static_rgb = self.static_rgb(dir_encoding) # (B, 3)
-        static = torch.cat([static_rgb, static_sigma], -1)
-
-        if not output_transient:
-            return static # (B, 4)
-
-        transient_encoding_input = torch.cat([xyz_encoding, input_t], -1)
-        transient_encoding = self.transient_encoding(transient_encoding_input)
-        transient_sigma = self.transient_sigma(transient_encoding) # (B, 1)
-        transient_rgb = self.transient_rgb(transient_encoding) # (B, 3)
-        transient_beta = self.transient_beta(transient_encoding) # (B, 1)
-
-        transient = torch.cat([transient_rgb, transient_sigma,
-                               transient_beta], -1) # (B, 5)
-
-        return torch.cat([static, transient], -1) # (B, 9)
+            rgb = self.rgb_linear(h)
+            outputs = torch.cat([rgb, alpha], -1)
+            return outputs
+        else:
+            assert False
 
 
 class Network(nn.Module):
@@ -149,13 +125,9 @@ class Network(nn.Module):
         # embedding xyz, dir
         self.embedding_xyz, self.input_ch_xyz = get_encoder(cfg.network.xyz_encoder)
         self.embedding_dir, self.input_ch_dir = get_encoder(cfg.network.dir_encoder)
-
         if self.encode_appearance:
             # embedding appearance
             self.embedding_a = torch.nn.Embedding(nerfw_opts.N_vocab, self.input_ch_a)
-        if self.encode_transient:
-            # embedding transient
-            self.embedding_t = torch.nn.Embedding(nerfw_opts.N_vocab, self.input_ch_tau)
 
         # coarse model
         self.model = NeRF("coarse",
@@ -197,26 +169,23 @@ class Network(nn.Module):
         else:
             fn = self.model
 
-        embedded = []
         inputs_flat = torch.reshape(inputs, [-1, inputs.shape[-1]])
-        embedded += [self.embedding_xyz(inputs_flat)]
+        embedded = self.embedding_xyz(inputs_flat)
 
         if self.use_viewdirs:
             input_dirs = viewdirs[:, None].expand(inputs.shape)
             input_dirs_flat = torch.reshape(input_dirs, [-1, input_dirs.shape[-1]])
             embedded_dirs = self.embedding_dir(input_dirs_flat)
-            embedded += [embedded_dirs]
-            # embedded = torch.cat([embedded, embedded_dirs], -1)
+            embedded = torch.cat([embedded, embedded_dirs], -1)
 
         if self.encode_appearance:
-            ts = ts[:, None].expand([inputs.shape[0], inputs.shape[1],1])
-            ts = torch.reshape(ts, [-1, ts.shape[-1]])
-            embedded_ts = self.embedding_a(ts)
+            input_ts = ts[:, None, :].expand(inputs.shape)
+            input_ts_flat = torch.reshape(input_ts, [-1, input_ts.shape[-1]])
+            input_ts_flat = input_ts_flat[..., :1]
+            embedded_ts = self.embedding_a(input_ts_flat)
             embedded_ts = embedded_ts.reshape(-1, self.input_ch_a)
-            embedded += [embedded_ts]
-            # embedded = torch.cat([embedded, embedded_ts], -1)
+            embedded = torch.cat([embedded, embedded_ts], -1)
 
-        embedded = torch.cat(embedded, -1)
         outputs_flat = self.batchify(fn, self.chunk)(embedded)
         outputs = torch.reshape(outputs_flat, list(inputs.shape[:-1]) + [outputs_flat.shape[-1]])
         return outputs
