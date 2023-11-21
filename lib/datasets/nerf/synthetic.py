@@ -120,6 +120,8 @@ class Dataset(data.Dataset):
             [0, self.focal, 0.5 * self.H],
             [0, 0, 1]
         ])
+        self.near = 2.
+        self.far = 6.
 
         # set args for center crop
         dH = int(self.H // 2 * self.precrop_frac)
@@ -185,7 +187,7 @@ class Dataset(data.Dataset):
             ray_d = self.rays_d[index].reshape(-1, 3)  # (H * W, 3)
             rgb = self.imgs[index].reshape(-1, 3)      # (H * W, 3)
 
-        ret = {'ray_o': ray_o, 'ray_d': ray_d, 'rgb': rgb}
+        ret = {'ray_o': ray_o, 'ray_d': ray_d, 'rgb': rgb, 'near': self.near, 'far': self.far}
         ret.update({'meta':
             {
                 'H': self.H,
